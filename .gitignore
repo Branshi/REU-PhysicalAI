@@ -1,0 +1,60 @@
+# Python environments
+.venv/
+.venv*/
+venv/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local plotting/runtime caches
+.cache/
+.matplotlib-cache/
+*/.matplotlib-cache/
+.matplotlib-cacche/
+*/.matplotlib-cacche/
+
+# MLflow local tracking state
+mlruns/
+mlflow.db
+mlflow.db-*
+
+# Generated model/data artifacts
+*.pt
+*.pth
+*.ckpt
+experiments/checkpoints/
+experiments/old_checkpoints/
+experiments/runs/
+common/datasets/
+
+# Generated animations and large media outputs
+*.mp4
+*.mov
+*.m4v
+*.gif
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+
+# LaTeX build byproducts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.nav
+*.out
+*.run.xml
+*.snm
+*.synctex.gz
+*.toc

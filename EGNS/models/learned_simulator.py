@@ -28,8 +28,8 @@ class LearnedSimulator(nn.Module):
         self.edge_feature_dim = edge_feature_dim
 
         # Register as buffers so they move with model.to(device)
-        self.register_buffer("acc_mean", acc_mean)
-        self.register_buffer("acc_std", acc_std)
+        self.register_buffer("acc_mean", acc_mean.reshape(-1))
+        self.register_buffer("acc_std", acc_std.reshape(-1))
 
     def predict_acceleration(self, positions, velocities, masses):
         graph = build_graph(
@@ -37,14 +37,15 @@ class LearnedSimulator(nn.Module):
             velocities=velocities,
             masses=masses,
         )
+        # compatbility for older models that might not use all edge features
         if self.edge_feature_dim is not None:
             graph["edge_features"] = graph["edge_features"][:, : self.edge_feature_dim]
 
         predicted_acceleration_normalized = self.graph_network(graph)
 
-        predicted_acceleration = predicted_acceleration_normalized * self.acc_std.view(
-            -1
-        ) + self.acc_mean.view(-1)
+        predicted_acceleration = (
+            predicted_acceleration_normalized * self.acc_std + self.acc_mean
+        )
 
         return predicted_acceleration
 

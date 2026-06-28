@@ -6,11 +6,8 @@ import sys
 import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-EGNS_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-if str(EGNS_ROOT) not in sys.path:
-    sys.path.insert(0, str(EGNS_ROOT))
 
 from common.initial_conditions import (
     get_condition,
@@ -24,9 +21,13 @@ from common.nbody_data import simulate_trajectory_from_initial_conditions
 from common.rollout.differentiable import rollout_steps
 from common.visualize import animate_trajectories, plot_trajectories
 
-from models.graph_network import EncodeProcessDecode
-from models.learned_simulator import LearnedSimulator
-from rollouts.gns_adapter import make_gns_step_fn, pack_gns_state, unpack_gns_state
+from EGNN_HNN.models.graph_network import EncodeProcessDecode
+from EGNN_HNN.models.learned_simulator import LearnedSimulator
+from EGNN_HNN.rollouts.gns_adapter import (
+    make_gns_step_fn,
+    pack_gns_state,
+    unpack_gns_state,
+)
 
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".matplotlib-cache"))
 os.environ.setdefault("XDG_CACHE_HOME", os.path.join(os.getcwd(), ".cache"))
@@ -79,38 +80,34 @@ def load_checkpoint(checkpoint_path, dataset, device):
 
     Full checkpoint format should contain:
         model_state_dict
-        acc_mean
-        acc_std
+        force_std
         model_config
         dt
 
     If an older raw state_dict is found, this function uses default config
-    and recomputes acc_mean/acc_std from the dataset.
+    and recomputes force_std from the dataset.
     """
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         model_state_dict = checkpoint["model_state_dict"]
-        acc_mean = checkpoint["acc_mean"].to(device)
-        acc_std = checkpoint["acc_std"].to(device)
+        force_std = checkpoint["force_std"].to(device)
         config = checkpoint["model_config"]
         dt = checkpoint["dt"]
     else:
         print("Loaded older raw state_dict checkpoint.")
-        print(
-            "Using default model config and recomputing acc_mean/acc_std from dataset."
-        )
+        print("Using default model config and recomputing force_std from dataset.")
 
         model_state_dict = checkpoint
 
         accelerations = dataset["accelerations"].to(device)
-
-        positions = dataset["positions"]
+        masses = dataset["masses"].to(device)
+        positions = dataset["positions"].to(device)
         _, _, _, dim = positions.shape
 
-        acc_mean = torch.zeros(1, 1, 1, 1, device=device, dtype=accelerations.dtype)
-        acc_std = accelerations.std().clamp_min(1e-8).view(1, 1, 1, 1)
+        forces = accelerations * masses.unsqueeze(1)
+        force_std = forces.std().clamp_min(1e-8).view(1, 1, 1, 1)
         processor_indices = {
             int(key.split(".")[1])
             for key in model_state_dict
@@ -145,7 +142,7 @@ def load_checkpoint(checkpoint_path, dataset, device):
             config["edge_input_dim"], device=device
         )
 
-    return model_state_dict, acc_mean, acc_std, config, dt
+    return model_state_dict, force_std, config, dt
 
 
 def choose_dynamic_trajectory(positions):
@@ -168,9 +165,9 @@ def parse_args():
     parser.add_argument(
         "--checkpoint-path",
         default=str(
-            PROJECT_ROOT / "experiments" / "checkpoints" / "egns" / "rollout.pt"
+            PROJECT_ROOT / "experiments" / "checkpoints" / "egnn_hnn" / "rollout.pt"
         ),
-        help="Checkpoint to evaluate. Defaults to experiments/checkpoints/egns/rollout.pt.",
+        help="Checkpoint to evaluate. Defaults to experiments/checkpoints/egnn_hnn/rollout.pt.",
     )
     parser.add_argument("--traj-idx", type=int, default=0)
     parser.add_argument(
@@ -272,7 +269,7 @@ def main():
     metadata = dataset.get("metadata", {})
 
     print("Using checkpoint:", args.checkpoint_path)
-    model_state_dict, acc_mean, acc_std, config, dt = load_checkpoint(
+    model_state_dict, force_std, config, dt = load_checkpoint(
         checkpoint_path=args.checkpoint_path,
         dataset=dataset,
         device=device,
@@ -281,7 +278,6 @@ def main():
     graph_network = EncodeProcessDecode(
         node_input_dim=config["node_input_dim"],
         edge_input_dim=config["edge_input_dim"],
-        output_dim=config["output_dim"],
         latent_dim=config["latent_dim"],
         hidden_dim=config["hidden_dim"],
         num_message_passing_steps=config["num_message_passing_steps"],
@@ -295,8 +291,7 @@ def main():
 
     simulator = LearnedSimulator(
         graph_network=graph_network,
-        acc_mean=acc_mean,
-        acc_std=acc_std,
+        force_std=force_std,
         dt=dt,
         edge_feature_dim=config["edge_input_dim"],
     ).to(device)
@@ -343,7 +338,7 @@ def main():
             or custom_masses is None
         ):
             raise ValueError(
-                "Custom EGNS rollouts require positions, velocities, and masses."
+                "Custom EGNN-HNN rollouts require positions, velocities, and masses."
             )
 
         initial_positions = validate_body_tensor(
@@ -456,14 +451,14 @@ def main():
             plot_trajectories(
                 true_positions=None,
                 predicted_positions=predicted_positions,
-                title="Predicted EGNS rollout",
+                title="Predicted EGNN-HNN rollout",
                 show=not args.no_show,
             )
         else:
             plot_trajectories(
                 true_positions=true_positions,
                 predicted_positions=predicted_positions,
-                title="True vs learned EGNS rollout",
+                title="True vs learned EGNN-HNN rollout",
                 show=not args.no_show,
             )
 

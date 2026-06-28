@@ -143,6 +143,7 @@ class MLflowLogger:
             tracking_uri or f"sqlite:///{self.project_root / 'mlflow.db'}"
         )
         self.tags = prepare_tags(tags)
+        self.requested_enabled = enabled
         self.enabled = enabled and mlflow is not None
         self.run = None
 
@@ -151,7 +152,9 @@ class MLflowLogger:
 
     def start(self) -> "MLflowLogger":
         if not self.enabled:
-            if mlflow is None:
+            if not self.requested_enabled:
+                print("MLflow logging disabled for this run.")
+            elif mlflow is None:
                 print("MLflow logging disabled: install mlflow to enable tracking.")
             return self
 

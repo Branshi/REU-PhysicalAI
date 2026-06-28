@@ -10,10 +10,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from graph_builder import build_graph
 from common.experiment_runs import prepare_run_outputs, save_json
 from common.mlflow_logger import MLflowLogger
-from models.graph_network import EncodeProcessDecode
+from EGNN_HNN.graph_builder import build_graph
+from EGNN_HNN.models.graph_network import EncodeProcessDecode
 
 
 def get_device():
@@ -27,7 +27,7 @@ def get_device():
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Train the N-body graph simulator with one-step acceleration loss."
+        description="Train the N-body EGNN-HNN with one-step force loss."
     )
     parser.add_argument(
         "--dataset-path",
@@ -36,7 +36,7 @@ def parse_args():
     parser.add_argument(
         "--checkpoint-path",
         default=str(
-            PROJECT_ROOT / "experiments" / "checkpoints" / "gns" / "one_step.pt"
+            PROJECT_ROOT / "experiments" / "checkpoints" / "egnn_hnn" / "one_step.pt"
         ),
         help="Checkpoint path for the best one-step model.",
     )
@@ -69,22 +69,17 @@ def parse_args():
 
 def compute_graph_feature_stats(
     positions,
-    velocities,
     masses,
     num_train_trajectories,
-    num_steps,
 ):
     node_feature_list = []
     edge_feature_list = []
-    num_stat_samples = min(10000, num_train_trajectories * num_steps)
 
-    for _ in range(num_stat_samples):
-        traj_idx = torch.randint(0, num_train_trajectories, (1,)).item()
-        time_idx = torch.randint(0, num_steps, (1,)).item()
-
+    # Node and edge features now depend only on masses, which are constant over
+    # a trajectory, so each training trajectory needs to be included only once.
+    for traj_idx in range(num_train_trajectories):
         graph = build_graph(
-            positions=positions[traj_idx, time_idx],
-            velocities=velocities[traj_idx, time_idx],
+            positions=positions[traj_idx, 0],
             masses=masses[traj_idx],
         )
         node_feature_list.append(graph["node_features"])
@@ -108,7 +103,7 @@ def main():
 
     output_path, run_dir, metrics_path = prepare_run_outputs(
         project_root=PROJECT_ROOT,
-        run_name="gns_onestep",
+        run_name="egnn_hnn_onestep",
         args=args,
         output_path=args.checkpoint_path,
     )
@@ -117,9 +112,9 @@ def main():
 
     mlflow_logger = MLflowLogger(
         project_root=PROJECT_ROOT,
-        experiment_name="gns_onestep",
+        experiment_name="egnn_hnn_onestep",
         run_name=run_dir.name if run_dir is not None else output_path.stem,
-        tags={"model": "GNS", "training_stage": "one_step", "device": device},
+        tags={"model": "EGNN-HNN", "training_stage": "one_step", "device": device},
         enabled=not args.disable_mlflow,
     ).start()
     mlflow_logger.log_params(args)
@@ -136,7 +131,6 @@ def main():
 
     sample_graph = build_graph(
         positions=positions[0, 0],
-        velocities=velocities[0, 0],
         masses=masses[0],
     )
     node_input_dim = sample_graph["node_features"].shape[-1]
@@ -154,44 +148,44 @@ def main():
         torch.quantile(accelerations.abs().flatten(), 0.99).item(),
     )
 
-    acc_mean = accelerations.mean(dim=(0, 1, 2), keepdim=True)
-    acc_std = accelerations.std(dim=(0, 1, 2), keepdim=True) + 1e-8
-
     num_trajectories, num_steps, _, dim = positions.shape
     if args.num_train_trajectories is None:
         num_train_trajectories = num_trajectories
     else:
         num_train_trajectories = min(args.num_train_trajectories, num_trajectories)
+    if num_train_trajectories <= 0:
+        raise ValueError("num-train-trajectories must be positive.")
 
-    mlflow_logger.log_params(
-        {
-            "data": {
-                "num_trajectories": num_trajectories,
-                "num_steps": num_steps,
-                "dim": dim,
-                "num_train_trajectories": num_train_trajectories,
-                "dt": dt,
-            },
-            "model": {
-                "node_input_dim": node_input_dim,
-                "edge_input_dim": edge_input_dim,
-                "output_dim": dim,
-            },
-        }
+    training_forces = (
+        accelerations[:num_train_trajectories]
+        * masses[:num_train_trajectories].unsqueeze(1)
     )
+    force_std = training_forces.std().clamp_min(1e-8).reshape(1)
+
+    mlflow_logger.log_params({
+        "data": {
+            "num_trajectories": num_trajectories,
+            "num_steps": num_steps,
+            "dim": dim,
+            "num_train_trajectories": num_train_trajectories,
+            "dt": dt,
+        },
+        "model": {
+            "node_input_dim": node_input_dim,
+            "edge_input_dim": edge_input_dim,
+            "output_dim": dim,
+        },
+    })
 
     node_mean, node_std, edge_mean, edge_std = compute_graph_feature_stats(
         positions=positions,
-        velocities=velocities,
         masses=masses,
         num_train_trajectories=num_train_trajectories,
-        num_steps=num_steps,
     )
 
     model = EncodeProcessDecode(
         node_input_dim=node_input_dim,
         edge_input_dim=edge_input_dim,
-        output_dim=dim,
         latent_dim=args.latent_dim,
         hidden_dim=args.hidden_dim,
         num_message_passing_steps=args.num_messages,
@@ -230,23 +224,19 @@ def main():
                 time_idx = torch.randint(0, num_steps, (1,)).item()
 
                 positions_t = positions[traj_idx, time_idx]
-                velocities_t = velocities[traj_idx, time_idx]
                 masses_t = masses[traj_idx]
-                target_acceleration = accelerations[traj_idx, time_idx]
+                target_force = accelerations[traj_idx, time_idx] * masses_t
 
-                target_acceleration_normalized = (
-                    target_acceleration - acc_mean.squeeze()
-                ) / acc_std.squeeze()
+                target_force_normalized = target_force / force_std.squeeze()
 
                 graph = build_graph(
                     positions=positions_t,
-                    velocities=velocities_t,
                     masses=masses_t,
                 )
-                predicted_acceleration = model(graph)
+                predicted_force = model(graph)
                 loss = F.mse_loss(
-                    predicted_acceleration,
-                    target_acceleration_normalized,
+                    predicted_force,
+                    target_force_normalized,
                 )
                 batch_loss = batch_loss + loss
 
@@ -265,8 +255,7 @@ def main():
             best_loss = avg_loss
             checkpoint = {
                 "model_state_dict": model.state_dict(),
-                "acc_mean": acc_mean,
-                "acc_std": acc_std,
+                "force_std": force_std,
                 "model_config": {
                     "node_input_dim": node_input_dim,
                     "edge_input_dim": edge_input_dim,

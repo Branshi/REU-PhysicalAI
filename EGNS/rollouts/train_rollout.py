@@ -72,6 +72,11 @@ def parse_args():
         default=None,
         help="Optional MLflow run description shown in the web UI.",
     )
+    parser.add_argument(
+        "--disable-mlflow",
+        action="store_true",
+        help="Run without creating an MLflow run. Useful for smoke tests.",
+    )
     return parser.parse_args()
 
 
@@ -183,6 +188,7 @@ def main():
         experiment_name="egns_rollout",
         run_name=run_dir.name if run_dir is not None else output_path.stem,
         tags={"model": "EGNS", "training_stage": "rollout", "device": device},
+        enabled=not args.disable_mlflow,
     ).start()
     mlflow_logger.log_params(args)
     mlflow_logger.log_description(args.description)

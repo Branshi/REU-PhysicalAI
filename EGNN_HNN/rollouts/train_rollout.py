@@ -7,19 +7,20 @@ from pathlib import Path
 import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-GNS_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-if str(GNS_ROOT) not in sys.path:
-    sys.path.insert(0, str(GNS_ROOT))
 
 from common.rollout.differentiable import rollout_steps
 from common.experiment_runs import prepare_run_outputs, save_json
 from common.mlflow_logger import MLflowLogger
 from common.rollout.losses import rollout_mse
-from models.graph_network import EncodeProcessDecode
-from models.learned_simulator import LearnedSimulator
-from rollouts.gns_adapter import make_gns_step_fn, pack_gns_state, unpack_gns_state
+from EGNN_HNN.models.graph_network import EncodeProcessDecode
+from EGNN_HNN.models.learned_simulator import LearnedSimulator
+from EGNN_HNN.rollouts.gns_adapter import (
+    make_gns_step_fn,
+    pack_gns_state,
+    unpack_gns_state,
+)
 
 
 def get_device():
@@ -33,7 +34,7 @@ def get_device():
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Fine-tune a pretrained GNS with differentiable rollout loss."
+        description="Fine-tune a pretrained EGNN-HNN with differentiable rollout loss."
     )
     parser.add_argument(
         "--dataset-path",
@@ -42,14 +43,14 @@ def parse_args():
     parser.add_argument(
         "--checkpoint-path",
         default=str(
-            PROJECT_ROOT / "experiments" / "checkpoints" / "gns" / "one_step.pt"
+            PROJECT_ROOT / "experiments" / "checkpoints" / "egnn_hnn" / "one_step.pt"
         ),
-        help="Pretrained one-step GNS checkpoint to fine-tune.",
+        help="Pretrained one-step EGNN-HNN checkpoint to fine-tune.",
     )
     parser.add_argument(
         "--output-path",
         default=str(
-            PROJECT_ROOT / "experiments" / "checkpoints" / "gns" / "rollout.pt"
+            PROJECT_ROOT / "experiments" / "checkpoints" / "egnn_hnn" / "rollout.pt"
         ),
         help="Checkpoint path for the best rollout fine-tuned model.",
     )
@@ -85,23 +86,21 @@ def load_checkpoint(checkpoint_path, dataset, device):
 
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         model_state_dict = checkpoint["model_state_dict"]
-        acc_mean = checkpoint["acc_mean"].to(device)
-        acc_std = checkpoint["acc_std"].to(device)
+        force_std = checkpoint["force_std"].to(device)
         config = checkpoint["model_config"]
         dt = checkpoint.get("dt", dataset.get("metadata", {}).get("dt", 0.01))
     elif isinstance(checkpoint, dict):
         print("Loaded older raw state_dict checkpoint.")
-        print(
-            "Using default model config and recomputing acc_mean/acc_std from dataset."
-        )
+        print("Using default model config and recomputing force_std from dataset.")
 
         model_state_dict = checkpoint
         accelerations = dataset["accelerations"].to(device)
-        positions = dataset["positions"]
-        _, _, num_bodies, dim = positions.shape
+        masses = dataset["masses"].to(device)
+        positions = dataset["positions"].to(device)
+        _, _, _, dim = positions.shape
 
-        acc_mean = accelerations.mean(dim=(0, 1, 2), keepdim=True)
-        acc_std = accelerations.std(dim=(0, 1, 2), keepdim=True) + 1e-8
+        forces = accelerations * masses.unsqueeze(1)
+        force_std = forces.std().clamp_min(1e-8).view(1, 1, 1, 1)
         processor_indices = {
             int(key.split(".")[1])
             for key in model_state_dict
@@ -140,14 +139,13 @@ def load_checkpoint(checkpoint_path, dataset, device):
             config["edge_input_dim"], device=device
         )
 
-    return model_state_dict, acc_mean, acc_std, config, dt
+    return model_state_dict, force_std, config, dt
 
 
-def build_simulator(model_state_dict, acc_mean, acc_std, config, dt, device):
+def build_simulator(model_state_dict, force_std, config, dt, device):
     graph_network = EncodeProcessDecode(
         node_input_dim=config["node_input_dim"],
         edge_input_dim=config["edge_input_dim"],
-        output_dim=config["output_dim"],
         latent_dim=config["latent_dim"],
         hidden_dim=config["hidden_dim"],
         num_message_passing_steps=config["num_message_passing_steps"],
@@ -160,8 +158,7 @@ def build_simulator(model_state_dict, acc_mean, acc_std, config, dt, device):
 
     simulator = LearnedSimulator(
         graph_network=graph_network,
-        acc_mean=acc_mean,
-        acc_std=acc_std,
+        force_std=force_std,
         dt=dt,
         edge_feature_dim=config["edge_input_dim"],
     ).to(device)
@@ -176,7 +173,7 @@ def main():
 
     output_path, run_dir, metrics_path = prepare_run_outputs(
         project_root=PROJECT_ROOT,
-        run_name="gns_rollout",
+        run_name="egnn_hnn_rollout",
         args=args,
         output_path=args.output_path,
     )
@@ -185,9 +182,9 @@ def main():
 
     mlflow_logger = MLflowLogger(
         project_root=PROJECT_ROOT,
-        experiment_name="gns_rollout",
+        experiment_name="egnn_hnn_rollout",
         run_name=run_dir.name if run_dir is not None else output_path.stem,
-        tags={"model": "GNS", "training_stage": "rollout", "device": device},
+        tags={"model": "EGNN-HNN", "training_stage": "rollout", "device": device},
         enabled=not args.disable_mlflow,
     ).start()
     mlflow_logger.log_params(args)
@@ -222,7 +219,7 @@ def main():
         }
     })
 
-    model_state_dict, acc_mean, acc_std, config, dt = load_checkpoint(
+    model_state_dict, force_std, config, dt = load_checkpoint(
         args.checkpoint_path,
         dataset,
         device,
@@ -230,8 +227,7 @@ def main():
     mlflow_logger.log_params({"pretrained_model": config, "data": {"dt": dt}})
     graph_network, simulator = build_simulator(
         model_state_dict,
-        acc_mean,
-        acc_std,
+        force_std,
         config,
         dt,
         device,
@@ -325,8 +321,7 @@ def main():
             best_loss = avg_loss
             checkpoint = {
                 "model_state_dict": graph_network.state_dict(),
-                "acc_mean": acc_mean,
-                "acc_std": acc_std,
+                "force_std": force_std,
                 "model_config": config,
                 "dt": dt,
                 "training_config": {

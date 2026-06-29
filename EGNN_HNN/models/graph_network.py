@@ -29,7 +29,7 @@ class MLP(nn.Module):
 
         for _ in range(num_hidden_layers):
             layers.append(nn.Linear(current_dim, hidden_dim))
-            layers.append(nn.ReLU())
+            layers.append(nn.SiLU())
             current_dim = hidden_dim
 
         layers.append(nn.Linear(current_dim, output_dim))
@@ -65,8 +65,8 @@ class InteractionNetwork(nn.Module):
         # receiver node latent
         # current edge latent
 
-        # + 1 for squared distance.
-        edge_input_dim = latent_dim * 3 + 1
+        # + 2 for squared distance and inverse softened distance.
+        edge_input_dim = latent_dim * 3 + 2
 
         self.edge_mlp = MLP(
             input_dim=edge_input_dim,
@@ -90,7 +90,15 @@ class InteractionNetwork(nn.Module):
             use_layer_norm=True,
         )
 
-    def forward(self, node_latents, edge_latents, coordinates, senders, receivers):
+    def forward(
+        self,
+        node_latents,
+        edge_latents,
+        coordinates,
+        senders,
+        receivers,
+        epsilon,
+    ):
         """
         Parameters:
             node_latents : torch.Tensor
@@ -121,12 +129,14 @@ class InteractionNetwork(nn.Module):
 
         relative_position = coordinates[senders] - coordinates[receivers]
         distance_squared = (relative_position**2).sum(dim=-1, keepdim=True)
+        inverse_softened_distance = torch.rsqrt(distance_squared + epsilon**2)
 
         edge_inputs = torch.cat(
             [
                 receiver_node_latents,
                 sender_node_latents,
                 distance_squared,
+                inverse_softened_distance,
                 edge_latents,
             ],
             dim=-1,
@@ -168,7 +178,7 @@ class PotentialReadout(nn.Module):
         super().__init__()
 
         self.edge_mlp = MLP(
-            input_dim=latent_dim * 3 + 1,
+            input_dim=latent_dim * 3 + 2,
             hidden_dim=hidden_dim,
             output_dim=latent_dim,
             num_hidden_layers=num_hidden_layers,
@@ -198,6 +208,7 @@ class PotentialReadout(nn.Module):
         coordinates,
         senders,
         receivers,
+        epsilon,
     ):
         sender_latents = node_latents[senders]
         receiver_latents = node_latents[receivers]
@@ -207,12 +218,14 @@ class PotentialReadout(nn.Module):
             dim=-1,
             keepdim=True,
         )
+        inverse_softened_distance = torch.rsqrt(distance_squared + epsilon**2)
 
         edge_inputs = torch.cat(
             [
                 receiver_latents,
                 sender_latents,
                 distance_squared,
+                inverse_softened_distance,
                 edge_latents,
             ],
             dim=-1,
@@ -284,6 +297,7 @@ class EncodeProcessDecode(nn.Module):
         node_std=None,
         edge_mean=None,
         edge_std=None,
+        epsilon=0.15,
     ):
 
         super().__init__()
@@ -302,6 +316,10 @@ class EncodeProcessDecode(nn.Module):
 
         if num_message_passing_steps < 1:
             raise ValueError("num_message_passing_steps must be at least 1")
+        if epsilon <= 0:
+            raise ValueError("epsilon must be positive")
+
+        self.epsilon = float(epsilon)
 
         if node_mean is None:
             node_mean = torch.zeros(node_input_dim)
@@ -378,6 +396,7 @@ class EncodeProcessDecode(nn.Module):
                     coordinates=coordinates,
                     senders=senders,
                     receivers=receivers,
+                    epsilon=self.epsilon,
                 )
 
             potential = self.potential_readout(
@@ -386,6 +405,7 @@ class EncodeProcessDecode(nn.Module):
                 coordinates=coordinates,
                 senders=senders,
                 receivers=receivers,
+                epsilon=self.epsilon,
             )
 
             # Compute force/p_dot from potential

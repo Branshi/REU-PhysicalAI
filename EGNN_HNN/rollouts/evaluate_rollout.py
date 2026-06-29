@@ -121,6 +121,7 @@ def load_checkpoint(checkpoint_path, dataset, device):
             "latent_dim": model_state_dict["node_encoder.net.4.weight"].shape[0],
             "hidden_dim": model_state_dict["node_encoder.net.0.weight"].shape[0],
             "num_message_passing_steps": len(processor_indices),
+            "epsilon": dataset.get("metadata", {}).get("epsilon", 0.15),
         }
 
         dt = dataset.get("metadata", {}).get("dt", 0.01)
@@ -285,6 +286,7 @@ def main():
         node_std=model_state_dict.get("node_std"),
         edge_mean=model_state_dict.get("edge_mean"),
         edge_std=model_state_dict.get("edge_std"),
+        epsilon=config.get("epsilon", 0.15),
     ).to(device)
 
     graph_network.load_state_dict(model_state_dict)

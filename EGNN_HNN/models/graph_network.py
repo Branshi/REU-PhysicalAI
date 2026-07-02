@@ -129,7 +129,10 @@ class InteractionNetwork(nn.Module):
 
         relative_position = coordinates[senders] - coordinates[receivers]
         distance_squared = (relative_position**2).sum(dim=-1, keepdim=True)
-        inverse_softened_distance = torch.rsqrt(distance_squared + epsilon**2)
+        # epsilon may be zero for unsoftened gravity. The numerical floor affects
+        # only exact/near-exact collisions and prevents rsqrt(0) from producing inf.
+        softened_distance_squared = (distance_squared + epsilon**2).clamp_min(1e-12)
+        inverse_softened_distance = torch.rsqrt(softened_distance_squared)
 
         edge_inputs = torch.cat(
             [
@@ -218,7 +221,9 @@ class PotentialReadout(nn.Module):
             dim=-1,
             keepdim=True,
         )
-        inverse_softened_distance = torch.rsqrt(distance_squared + epsilon**2)
+        # Use the same collision-safe radial feature as the interaction blocks.
+        softened_distance_squared = (distance_squared + epsilon**2).clamp_min(1e-12)
+        inverse_softened_distance = torch.rsqrt(softened_distance_squared)
 
         edge_inputs = torch.cat(
             [
@@ -316,8 +321,8 @@ class EncodeProcessDecode(nn.Module):
 
         if num_message_passing_steps < 1:
             raise ValueError("num_message_passing_steps must be at least 1")
-        if epsilon <= 0:
-            raise ValueError("epsilon must be positive")
+        if epsilon < 0:
+            raise ValueError("epsilon must be nonnegative")
 
         self.epsilon = float(epsilon)
 

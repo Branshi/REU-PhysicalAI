@@ -230,7 +230,7 @@ def main():
     accelerations = dataset["accelerations"].to(device)
     masses = dataset["masses"].to(device)
     dt = dataset.get("metadata", {}).get("dt", 0.01)
-    epsilon = dataset.get("metadata", {}).get("epsilon", 0.15)
+    epsilon = dataset.get("metadata", {}).get("epsilon", 0)
 
     sample_graph = build_graph(
         positions=positions[0, 0],
@@ -288,8 +288,7 @@ def main():
             "num_steps": num_steps,
             "dim": dim,
             "num_train_trajectories": num_train_trajectories,
-            "num_validation_trajectories": num_trajectories
-            - num_train_trajectories,
+            "num_validation_trajectories": num_trajectories - num_train_trajectories,
             "num_validation_samples": args.num_validation_samples,
             "dt": dt,
             "epsilon": epsilon,

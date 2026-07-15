@@ -19,6 +19,11 @@ from common.initial_conditions import (
 )
 from common.nbody_data import simulate_trajectory_from_initial_conditions
 from common.rollout.differentiable import rollout_steps
+from common.splits import (
+    load_split_manifest,
+    resolve_project_path,
+    validate_checkpoint_split,
+)
 from common.visualize import animate_trajectories, plot_trajectories
 
 from EGNN_HNN.models.graph_network import EncodeProcessDecode
@@ -74,7 +79,13 @@ def rollout(simulator, initial_positions, initial_velocities, masses, num_steps)
     return predicted_positions, predicted_velocities
 
 
-def load_checkpoint(checkpoint_path, dataset, device):
+def load_checkpoint(
+    checkpoint_path,
+    dataset,
+    device,
+    train_indices=None,
+    split_manifest=None,
+):
     """
     Load either a full checkpoint dictionary or an older raw state_dict.
 
@@ -89,6 +100,10 @@ def load_checkpoint(checkpoint_path, dataset, device):
     """
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
+    # Verify that reported validation/test results use the same partition that
+    # produced the checkpoint whenever split metadata is available.
+    if split_manifest is not None:
+        validate_checkpoint_split(checkpoint, split_manifest)
 
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         model_state_dict = checkpoint["model_state_dict"]
@@ -103,6 +118,10 @@ def load_checkpoint(checkpoint_path, dataset, device):
 
         accelerations = dataset["accelerations"].to(device)
         masses = dataset["masses"].to(device)
+        # Rebuild legacy force normalization from training trajectories only.
+        if train_indices is not None:
+            accelerations = accelerations[train_indices]
+            masses = masses[train_indices]
         positions = dataset["positions"].to(device)
         _, _, _, dim = positions.shape
 
@@ -161,7 +180,7 @@ def parse_args():
     )
     parser.add_argument(
         "--dataset-path",
-        default=str(PROJECT_ROOT / "common" / "nbody_3body_dataset.pt"),
+        default=str(PROJECT_ROOT / "common" / "datasets" / "nbody_dataset.pt"),
     )
     parser.add_argument(
         "--checkpoint-path",
@@ -170,7 +189,23 @@ def parse_args():
         ),
         help="Checkpoint to evaluate. Defaults to experiments/checkpoints/egnn_hnn/rollout.pt.",
     )
-    parser.add_argument("--traj-idx", type=int, default=0)
+    parser.add_argument(
+        "--split-path",
+        default=str(PROJECT_ROOT / "experiments" / "splits" / "nbody_dataset.json"),
+        help="Trajectory-level train/validation/test split manifest.",
+    )
+    parser.add_argument(
+        "--eval-split",
+        choices=["train", "val", "test"],
+        default="test",
+        help="Manifest split from which dataset trajectories may be evaluated.",
+    )
+    parser.add_argument(
+        "--traj-idx",
+        type=int,
+        default=None,
+        help="Global dataset trajectory ID. Defaults to the first ID in eval-split.",
+    )
     parser.add_argument(
         "--initial-conditions",
         default=None,
@@ -262,18 +297,32 @@ def main():
     device = get_device()
     print("Using device:", device)
 
-    dataset = torch.load(args.dataset_path, map_location=device)
+    dataset_path = resolve_project_path(args.dataset_path)
+    split_path = resolve_project_path(args.split_path)
+    checkpoint_path = resolve_project_path(args.checkpoint_path)
+    dataset = torch.load(dataset_path, map_location=device)
 
     positions = dataset["positions"].to(device)
     velocities = dataset["velocities"].to(device)
     masses = dataset["masses"].to(device)
     metadata = dataset.get("metadata", {})
 
-    print("Using checkpoint:", args.checkpoint_path)
+    # Dataset-based evaluation defaults to the held-out test list. Other splits
+    # can be selected explicitly for diagnostics through --eval-split.
+    manifest, split_indices = load_split_manifest(
+        split_path=split_path,
+        dataset_path=dataset_path,
+        dataset_shape=positions.shape,
+    )
+    allowed_indices = split_indices[args.eval_split]
+
+    print("Using checkpoint:", checkpoint_path)
     model_state_dict, force_std, config, dt = load_checkpoint(
-        checkpoint_path=args.checkpoint_path,
+        checkpoint_path=checkpoint_path,
         dataset=dataset,
         device=device,
+        train_indices=split_indices["train"],
+        split_manifest=manifest,
     )
 
     graph_network = EncodeProcessDecode(
@@ -389,10 +438,20 @@ def main():
     else:
         rollout_dt = dt
         if args.traj_mode == "dynamic":
-            traj_idx = choose_dynamic_trajectory(positions)
+            # Search only the allowed split, then convert the local winner back
+            # to its global dataset trajectory ID.
+            local_idx = choose_dynamic_trajectory(positions[allowed_indices])
+            traj_idx = allowed_indices[local_idx]
             print(f"Selected dynamic trajectory: {traj_idx}")
         else:
-            traj_idx = args.traj_idx
+            traj_idx = allowed_indices[0] if args.traj_idx is None else args.traj_idx
+
+        # Reject global IDs that do not belong to the requested evaluation split.
+        if traj_idx not in set(allowed_indices):
+            raise ValueError(
+                f"Trajectory {traj_idx} is not in the {args.eval_split} split."
+            )
+        print(f"Evaluating {args.eval_split} trajectory: {traj_idx}")
 
         max_rollout_steps = positions.shape[1] - 1
 
@@ -400,11 +459,6 @@ def main():
             rollout_steps = max_rollout_steps
         else:
             rollout_steps = min(args.rollout_steps, max_rollout_steps)
-
-        if traj_idx < 0 or traj_idx >= positions.shape[0]:
-            raise ValueError(
-                f"traj_idx must be between 0 and {positions.shape[0] - 1}."
-            )
 
         if args.rollout_steps is not None and args.rollout_steps > max_rollout_steps:
             print(
@@ -435,13 +489,15 @@ def main():
     print("predicted_positions shape:", predicted_positions.shape)
     print("initial pair distances:", initial_distances[pair_mask].tolist())
     if true_positions is not None:
-        position_mse = torch.mean((predicted_positions - true_positions) ** 2)
+        rollout_position_rmse = torch.sqrt(
+            torch.mean((predicted_positions - true_positions) ** 2)
+        )
         true_displacement = torch.linalg.vector_norm(
             true_positions[-1] - true_positions[0],
             dim=-1,
         )
         print("true_positions shape:", true_positions.shape)
-        print("position rollout MSE:", position_mse.item())
+        print("rollout position RMSE:", rollout_position_rmse.item())
         print("true final displacement per body:", true_displacement.tolist())
     print(
         "animation length:",

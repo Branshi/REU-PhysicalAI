@@ -1,11 +1,15 @@
 import argparse
+import json
+import sys
+from pathlib import Path
 
 import torch
 
-try:
-    from common.rollout.integrators import velocity_verlet_step
-except ModuleNotFoundError:
-    from rollout.integrators import velocity_verlet_step
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from common.rollout.integrators import velocity_verlet_step
 
 
 def compute_acceleration(positions, masses, G=1.0, epsilon=0.05):
@@ -376,8 +380,16 @@ def generate_dataset(
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate an N-body dataset.")
-    parser.add_argument("--output-path", default="nbody_3body_dataset.pt")
-    parser.add_argument("--num-trajectories", type=int, default=1000)
+    parser.add_argument("--dataset-name", default="nbody_dataset")
+    parser.add_argument(
+        "--output-path",
+        default=str(PROJECT_ROOT / "common" / "datasets" / "nbody_dataset.pt"),
+    )
+    parser.add_argument(
+        "--split-output-path",
+        default=str(PROJECT_ROOT / "experiments" / "splits" / "nbody_dataset.json"),
+    )
+    parser.add_argument("--num-trajectories", type=int, default=2000)
     parser.add_argument("--num-bodies", type=int, default=3)
     parser.add_argument("--num-steps", type=int, default=300)
     parser.add_argument("--dt", type=float, default=0.01)
@@ -391,11 +403,38 @@ def parse_args():
     parser.add_argument("--max-acceleration", type=float, default=80.0)
     parser.add_argument("--max-resample-attempts", type=int, default=100)
     parser.add_argument("--seed", type=int, default=None)
+    parser.add_argument("--split-seed", type=int, default=None)
+    parser.add_argument("--train-fraction", type=float, default=0.7)
+    parser.add_argument("--val-fraction", type=float, default=0.15)
+    parser.add_argument("--test-fraction", type=float, default=0.15)
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+
+    # Validate split settings before running the more expensive trajectory
+    # simulation, and require each partition to receive at least one trajectory.
+    split_fractions = (
+        args.train_fraction,
+        args.val_fraction,
+        args.test_fraction,
+    )
+    if any(fraction <= 0.0 for fraction in split_fractions):
+        raise ValueError("train/val/test fractions must all be positive")
+
+    total_fraction = sum(split_fractions)
+    if abs(total_fraction - 1.0) > 1e-8:
+        raise ValueError("train/val/test fractions must sum to 1.0")
+
+    num_train = int(args.train_fraction * args.num_trajectories)
+    num_val = int(args.val_fraction * args.num_trajectories)
+    num_test = args.num_trajectories - num_train - num_val
+    if min(num_train, num_val, num_test) <= 0:
+        raise ValueError(
+            "train/val/test fractions and num-trajectories must give each split "
+            "at least one trajectory"
+        )
 
     if args.seed is not None:
         torch.manual_seed(args.seed)
@@ -415,15 +454,62 @@ def main():
         max_acceleration=args.max_acceleration,
         max_resample_attempts=args.max_resample_attempts,
     )
-    torch.save(dataset, args.output_path)
+    dataset["metadata"]["seed"] = args.seed
 
-    print(f"Saved dataset to {args.output_path}.")
-    print("positions:", dataset["positions"].shape)
-    print("velocities:", dataset["velocities"].shape)
-    print("momenta:", dataset["momenta"].shape)
-    print("accelerations:", dataset["accelerations"].shape)
-    print("forces:", dataset["forces"].shape)
-    print("masses:", dataset["masses"].shape)
+    # Store an absolute dataset path so every trainer can verify that the split
+    # manifest belongs to this exact generated file.
+    output_path = Path(args.output_path).expanduser().resolve()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(dataset, output_path)
+
+    # Use a dedicated generator so changing the split seed changes only the
+    # trajectory assignment, not the simulated trajectories themselves.
+    split_seed = args.split_seed if args.split_seed is not None else 0
+    generator = torch.Generator().manual_seed(split_seed)
+
+    indices = torch.randperm(args.num_trajectories, generator=generator).tolist()
+
+    # Slice one seeded permutation so the three partitions are reproducible,
+    # non-overlapping, and collectively contain every trajectory.
+    train_indices = indices[:num_train]
+    val_indices = indices[num_train : num_train + num_val]
+    test_indices = indices[num_train + num_val :]
+
+    # Keep both the exact IDs and the configuration needed to audit an
+    # experiment later from its checkpoint or MLflow metadata.
+    split_manifest = {
+        "name": args.dataset_name,
+        "dataset_path": str(output_path),
+        "num_trajectories": args.num_trajectories,
+        "num_steps": args.num_steps,
+        "num_bodies": args.num_bodies,
+        "dim": args.dim,
+        "split": {
+            "train_indices": train_indices,
+            "val_indices": val_indices,
+            "test_indices": test_indices,
+        },
+        "split_config": {
+            "split_mode": "random_seeded",
+            "split_seed": split_seed,
+            "train_fraction": args.train_fraction,
+            "val_fraction": args.val_fraction,
+            "test_fraction": args.test_fraction,
+            "num_train": len(train_indices),
+            "num_val": len(val_indices),
+            "num_test": len(test_indices),
+        },
+        "dataset_metadata": dataset["metadata"],
+    }
+
+    split_output_path = Path(args.split_output_path).expanduser().resolve()
+    split_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with split_output_path.open("w", encoding="utf-8") as f:
+        json.dump(split_manifest, f, indent=2)
+
+    print(f"Saved dataset to {output_path}.")
+    print(f"Saved trajectory split to {split_output_path}.")
     print("acc mean:", dataset["accelerations"].mean().item())
     print("acc std:", dataset["accelerations"].std().item())
     print("acc max abs:", dataset["accelerations"].abs().max().item())

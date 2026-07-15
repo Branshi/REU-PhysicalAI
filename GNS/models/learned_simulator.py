@@ -27,7 +27,8 @@ class LearnedSimulator(nn.Module):
         self.dt = dt
         self.edge_feature_dim = edge_feature_dim
 
-        # Register as buffers so they move with model.to(device)
+        # Keep acc_mean as a buffer for checkpoint compatibility, but GNS uses
+        # the EGNS zero-mean convention when unnormalizing accelerations.
         self.register_buffer("acc_mean", acc_mean)
         self.register_buffer("acc_std", acc_std)
 
@@ -44,7 +45,7 @@ class LearnedSimulator(nn.Module):
 
         predicted_acceleration = predicted_acceleration_normalized * self.acc_std.view(
             -1
-        ) + self.acc_mean.view(-1)
+        )
 
         return predicted_acceleration
 

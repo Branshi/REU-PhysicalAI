@@ -15,6 +15,7 @@ if str(HNN_ROOT) not in sys.path:
 
 from common.experiment_runs import prepare_run_outputs, save_json
 from common.mlflow_logger import MLflowLogger
+from common.splits import load_split_manifest, resolve_project_path
 from models.hamiltonian_network import HNN
 
 
@@ -28,12 +29,12 @@ def get_device():
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Train the Hamiltonian network with one-step derivative loss."
+        description="Train the Hamiltonian network with one-step potential force loss."
     )
 
     parser.add_argument(
         "--dataset-path",
-        default=str(PROJECT_ROOT / "common" / "nbody_3body_dataset.pt"),
+        default=str(PROJECT_ROOT / "common" / "datasets" / "nbody_dataset.pt"),
     )
     parser.add_argument(
         "--output-path",
@@ -47,7 +48,18 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--train-fraction", type=float, default=0.8)
+    parser.add_argument(
+        "--num-validation-samples",
+        type=int,
+        default=500,
+        help="Number of fixed trajectory/time pairs evaluated after each epoch.",
+    )
+    parser.add_argument(
+        "--validation-seed",
+        type=int,
+        default=1234,
+        help="Seed used once to choose the fixed validation samples.",
+    )
     parser.add_argument(
         "--description",
         default=None,
@@ -58,8 +70,38 @@ def parse_args():
         action="store_true",
         help="Run without creating an MLflow run. Useful for smoke tests.",
     )
+    parser.add_argument(
+        "--split-path",
+        default=str(PROJECT_ROOT / "experiments" / "splits" / "nbody_dataset.json"),
+        help="Trajectory-level train/validation/test split manifest.",
+    )
 
     return parser.parse_args()
+
+
+def flatten_potential_inputs(
+    positions,
+    forces,
+    masses,
+    num_traj,
+    num_steps,
+    spatial_dim,
+    num_bodies,
+):
+    # q:      [N, T, B * D]
+    # masses: [N, T, B]
+    # force:  [N, T, B * D]
+    q_t = positions.reshape(num_traj, num_steps, spatial_dim)
+    m_t = masses.reshape(num_traj, 1, num_bodies)
+    m_t = m_t.expand(-1, num_steps, -1)
+    force_t = forces.reshape(num_traj, num_steps, spatial_dim)
+
+    inputs = torch.cat([q_t, m_t], dim=-1)
+    num_samples = num_traj * num_steps
+    return (
+        inputs.reshape(num_samples, inputs.shape[-1]),
+        force_t.reshape(num_samples, force_t.shape[-1]),
+    )
 
 
 def main():
@@ -87,134 +129,149 @@ def main():
     mlflow_logger.log_description(args.description)
     mlflow_logger.log_tags({"checkpoint_path": output_path, "run_dir": run_dir})
 
-    dataset = torch.load(args.dataset_path, map_location=device)
+    dataset_path = resolve_project_path(args.dataset_path)
+    split_path = resolve_project_path(args.split_path)
+    dataset = torch.load(dataset_path, map_location=device)
 
-    positions = dataset["positions"].to(device)
-    velocities = dataset["velocities"].to(device)
-    momenta = dataset["momenta"].to(device)
-    forces = dataset["forces"].to(device)
-    masses = dataset["masses"].to(device)
+    manifest, split_indices = load_split_manifest(
+        split_path=split_path,
+        dataset_path=dataset_path,
+        dataset_shape=dataset["positions"].shape,
+    )
+    train_indices = split_indices["train"]
+    val_indices = split_indices["val"]
 
-    # We must properly flatten data in order to pass into the HNN
+    train_pos = dataset["positions"][train_indices].to(device)
+    train_forces = dataset["forces"][train_indices].to(device)
+    train_masses = dataset["masses"][train_indices].to(device)
 
-    # Original shapes:
-    # positions:  [num_trajectories, num_steps, num_bodies, dim]
-    # momenta:    [num_trajectories, num_steps, num_bodies, dim]
-    # velocities: [num_trajectories, num_steps, num_bodies, dim]
-    # forces:     [num_trajectories, num_steps, num_bodies, dim]
+    val_pos = dataset["positions"][val_indices].to(device)
+    val_forces = dataset["forces"][val_indices].to(device)
+    val_masses = dataset["masses"][val_indices].to(device)
 
-    num_trajectories, num_steps, num_bodies, dim = positions.shape
-
-    q_dim = num_bodies * dim
+    num_train_traj, num_steps, num_bodies, dim = train_pos.shape
+    num_val_traj = val_pos.shape[0]
+    spatial_dim = num_bodies * dim
     mass_dim = num_bodies
-    qp_dim = 2 * q_dim
-    input_dim = qp_dim + mass_dim  # mass for each body
+    input_dim = spatial_dim + mass_dim
+    dt = dataset.get("metadata", {}).get("dt", 0.01)
 
-    mlflow_logger.log_params(
-        {
-            "data": {
-                "num_trajectories": num_trajectories,
-                "num_steps": num_steps,
-                "num_bodies": num_bodies,
-                "dim": dim,
-            },
-            "model": {
-                "input_dim": input_dim,
-                "q_dim": q_dim,
-                "mass_dim": mass_dim,
-                "qp_dim": qp_dim,
-            },
-        }
+    train_inputs, train_targets = flatten_potential_inputs(
+        train_pos,
+        train_forces,
+        train_masses,
+        num_train_traj,
+        num_steps,
+        spatial_dim,
+        num_bodies,
+    )
+    val_inputs, val_targets = flatten_potential_inputs(
+        val_pos,
+        val_forces,
+        val_masses,
+        num_val_traj,
+        num_steps,
+        spatial_dim,
+        num_bodies,
     )
 
-    # Flatten body and coordinate dimensions.
-    # q:     [N, T, B * D]
-    # p:     [N, T, B * D]
-    # q_dot: [N, T, B * D]
-    # p_dot: [N, T, B * D]
-    q = positions.reshape(num_trajectories, num_steps, q_dim)
-    p = momenta.reshape(num_trajectories, num_steps, q_dim)
-    m = masses.reshape(num_trajectories, 1, num_bodies)
-    m = m.expand(-1, num_steps, -1)
+    if args.num_validation_samples <= 0:
+        raise ValueError("num-validation-samples must be positive.")
 
-    q_dot = velocities.reshape(num_trajectories, num_steps, q_dim)
-    p_dot = forces.reshape(num_trajectories, num_steps, q_dim)
+    validation_generator = torch.Generator().manual_seed(args.validation_seed)
+    validation_trajectories = torch.randint(
+        0,
+        num_val_traj,
+        (args.num_validation_samples,),
+        generator=validation_generator,
+    )
+    validation_times = torch.randint(
+        0,
+        num_steps,
+        (args.num_validation_samples,),
+        generator=validation_generator,
+    )
+    validation_flat_indices = validation_trajectories * num_steps + validation_times
+    validation_inputs = val_inputs[validation_flat_indices.to(device)]
+    validation_targets = val_targets[validation_flat_indices.to(device)]
+    validation_local_indices = list(
+        zip(validation_trajectories.tolist(), validation_times.tolist())
+    )
+    validation_global_indices = [
+        (val_indices[traj_idx], time_idx)
+        for traj_idx, time_idx in validation_local_indices
+    ]
 
-    # Build state and derivative target.
-    # state:  [N, T, 2 * B * D] = [q, p]
-    # target: [N, T, 2 * B * D] = [q_dot, p_dot]
-    states = torch.cat([q, p, m], dim=-1)
-    targets = torch.cat([q_dot, p_dot], dim=-1)
+    train_input_mean = train_inputs.mean(dim=0)
+    train_input_std = train_inputs.std(dim=0).clamp_min(1e-8)
+    # Match EGNN_HNN: one scalar force scale preserves rotational symmetry.
+    force_std = train_targets.std().clamp_min(1e-8).reshape(1)
 
-    # Combine trajectory dimension and time dimension.
-    # states:  [N * T, input_dim]
-    # targets: [N * T, input_dim]
-    states = states.reshape(num_trajectories * num_steps, input_dim)
-    targets = targets.reshape(num_trajectories * num_steps, qp_dim)
+    print("train inputs:", train_inputs.shape)
+    print("train force targets:", train_targets.shape)
+    print("validation inputs:", val_inputs.shape)
+    print("validation force targets:", val_targets.shape)
 
-    print("states:", states.shape)
-    print("targets:", targets.shape)
-
-    # Data Split
-
-    num_samples = states.shape[0]
-    indices = torch.randperm(num_samples, device=device)
-
-    train_size = int(args.train_fraction * num_samples)
-
-    train_indices = indices[:train_size]
-    val_indices = indices[train_size:]
-
-    train_states = states[train_indices]
-    train_targets = targets[train_indices]
-
-    train_state_mean = train_states.mean(dim=0)
-    train_state_std = train_states.std(dim=0).clamp_min(1e-8)
-    train_target_std = train_targets.std(dim=0).clamp_min(1e-8)
-
-    val_states = states[val_indices]
-    val_targets = targets[val_indices]
-
-    print("train states:", train_states.shape)
-    print("val states:", val_states.shape)
-
-    # Model Construction
+    mlflow_logger.log_params({
+        "data": {
+            "dataset_path": str(dataset_path),
+            "num_train_trajectories": num_train_traj,
+            "num_val_trajectories": num_val_traj,
+            "num_test_trajectories": len(split_indices["test"]),
+            "num_validation_samples": args.num_validation_samples,
+            "validation_seed": args.validation_seed,
+            "num_steps": num_steps,
+            "num_bodies": num_bodies,
+            "dim": dim,
+            "dt": dt,
+        },
+        "split": {
+            "manifest_path": str(split_path),
+            **manifest.get("split_config", {}),
+        },
+        "model": {
+            "input_dim": input_dim,
+            "spatial_dim": spatial_dim,
+            "mass_dim": mass_dim,
+            "output_dim": dim,
+        },
+    })
 
     model = HNN(
         input_dim=input_dim,
         hidden_dim=args.hidden_dim,
-        q_dim=q_dim,
-        state_mean=train_state_mean,
-        state_std=train_state_std,
+        spatial_dim=spatial_dim,
+        state_mean=train_input_mean,
+        state_std=train_input_std,
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-    # Training loop
-
     best_val_loss = float("inf")
+    best_validation_acceleration_rmse = float("inf")
+    last_train_loss = float("nan")
+    last_validation_force_loss = float("nan")
+    last_validation_acceleration_rmse = float("nan")
 
     for epoch in range(1, args.epochs + 1):
-        # put the model in train mode
         model.train()
-
-        # creates a random ordering of training sample indicies
-        permutation = torch.randperm(train_states.shape[0], device=device)
+        permutation = torch.randperm(train_inputs.shape[0], device=device)
 
         total_train_loss = 0.0
         num_train_batches = 0
 
-        for start in range(0, train_states.shape[0], args.batch_size):
+        for start in range(0, train_inputs.shape[0], args.batch_size):
             end = start + args.batch_size
             batch_indices = permutation[start:end]
 
-            x_batch = train_states[batch_indices]
-            dxdt_batch = train_targets[batch_indices]
+            x_batch = train_inputs[batch_indices]
+            force_batch = train_targets[batch_indices]
+            target_force_normalized = force_batch / force_std
 
-            pred_dxdt = model.time_derivative(x_batch)
-
+            predicted_force_normalized = model.force(x_batch)
             loss = F.mse_loss(
-                pred_dxdt / train_target_std, dxdt_batch / train_target_std
+                predicted_force_normalized,
+                target_force_normalized,
             )
 
             optimizer.zero_grad()
@@ -226,58 +283,94 @@ def main():
 
         avg_train_loss = total_train_loss / num_train_batches
 
-        # Validation
-        # Important: do NOT use torch.no_grad() here as HNN validation still needs autograd with respect to inputs
-
         model.eval()
-
         total_val_loss = 0.0
         num_val_batches = 0
+        total_acceleration_squared_error = 0.0
+        total_acceleration_values = 0
 
-        for start in range(0, val_states.shape[0], args.batch_size):
+        for start in range(0, validation_inputs.shape[0], args.batch_size):
             end = start + args.batch_size
 
-            x_batch = val_states[start:end]
-            dxdt_batch = val_targets[start:end]
+            x_batch = validation_inputs[start:end]
+            force_batch = validation_targets[start:end]
+            target_force_normalized = force_batch / force_std
 
-            pred_dxdt = model.time_derivative(x_batch)
-
-            val_loss = F.mse_loss(
-                pred_dxdt / train_target_std, dxdt_batch / train_target_std
+            predicted_force_normalized = model.force(
+                x_batch,
+                create_graph=False,
             )
+            val_loss = F.mse_loss(
+                predicted_force_normalized,
+                target_force_normalized,
+            )
+
+            predicted_force = (predicted_force_normalized * force_std).reshape(
+                -1, num_bodies, dim
+            )
+            target_force = force_batch.reshape(-1, num_bodies, dim)
+            batch_masses = x_batch[:, spatial_dim:].reshape(-1, num_bodies, 1)
+            acceleration_squared_error = (
+                predicted_force / batch_masses - target_force / batch_masses
+            ).square()
 
             total_val_loss += val_loss.item()
             num_val_batches += 1
+            total_acceleration_squared_error += acceleration_squared_error.sum().item()
+            total_acceleration_values += acceleration_squared_error.numel()
 
         avg_val_loss = total_val_loss / num_val_batches
+        validation_acceleration_rmse = (
+            total_acceleration_squared_error / total_acceleration_values
+        ) ** 0.5
+        last_train_loss = avg_train_loss
+        last_validation_force_loss = avg_val_loss
+        last_validation_acceleration_rmse = validation_acceleration_rmse
+
         if epoch % 50 == 0:
             print(
                 f"Epoch: {epoch:04d} | "
-                f"train loss: {avg_train_loss:.6f} | "
-                f"val loss: {avg_val_loss}"
+                f"train normalized force MSE: {avg_train_loss:.6f} | "
+                f"validation normalized force MSE: {avg_val_loss:.6f} | "
+                f"validation acceleration RMSE: {validation_acceleration_rmse:.6f}"
             )
 
-        # Save Checkpoint
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
+            best_validation_acceleration_rmse = validation_acceleration_rmse
             checkpoint = {
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
+                "force_std": force_std,
                 "model_config": {
                     "input_dim": input_dim,
                     "hidden_dim": args.hidden_dim,
                     "num_bodies": num_bodies,
                     "dim": dim,
-                    "q_dim": q_dim,
+                    "spatial_dim": spatial_dim,
+                    "mass_dim": mass_dim,
+                    "output_dim": dim,
                 },
+                "dt": dt,
                 "training_config": {
                     "epochs": args.epochs,
                     "batch_size": args.batch_size,
                     "lr": args.lr,
-                    "train_fraction": args.train_fraction,
+                    "split_path": str(split_path),
+                    "split_seed": manifest.get("split_config", {}).get("split_seed"),
+                    "num_train_trajectories": num_train_traj,
+                    "num_val_trajectories": num_val_traj,
+                    "num_test_trajectories": len(split_indices["test"]),
+                    "num_validation_samples": args.num_validation_samples,
+                    "validation_seed": args.validation_seed,
+                    "validation_indices": validation_global_indices,
+                    "validation_local_indices": validation_local_indices,
                 },
+                "split_manifest": manifest,
                 "dataset_metadata": dataset.get("metadata", {}),
-                "best_val_loss": best_val_loss,
+                "train_loss_at_best": avg_train_loss,
+                "best_validation_normalized_force_mse": best_val_loss,
+                "validation_acceleration_rmse_at_best": validation_acceleration_rmse,
             }
 
             torch.save(checkpoint, output_path)
@@ -285,15 +378,20 @@ def main():
 
         mlflow_logger.log_metrics(
             {
-                "train_loss": avg_train_loss,
-                "val_loss": avg_val_loss,
-                "best_val_loss": best_val_loss,
+                "train_normalized_force_mse": avg_train_loss,
+                "validation_normalized_force_mse": avg_val_loss,
+                "validation_acceleration_rmse": validation_acceleration_rmse,
+                "best_validation_normalized_force_mse": best_val_loss,
             },
             step=epoch,
         )
 
     metrics = {
-        "best_val_loss": best_val_loss,
+        "best_validation_normalized_force_mse": best_val_loss,
+        "final_train_normalized_force_mse": last_train_loss,
+        "final_validation_normalized_force_mse": last_validation_force_loss,
+        "validation_acceleration_rmse_at_best": best_validation_acceleration_rmse,
+        "final_validation_acceleration_rmse": last_validation_acceleration_rmse,
         "epochs_completed": args.epochs,
         "checkpoint_path": str(output_path),
     }
@@ -305,7 +403,11 @@ def main():
     mlflow_logger.end()
 
     print(f"Saved best model to {output_path}")
-    print(f"Best validation loss: {best_val_loss:.6f}")
+    print(f"Best validation normalized force MSE: {best_val_loss:.6f}")
+    print(
+        "Validation acceleration RMSE at best checkpoint: "
+        f"{best_validation_acceleration_rmse:.6f}"
+    )
 
 
 if __name__ == "__main__":

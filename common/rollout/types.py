@@ -17,13 +17,18 @@ TrajectoryTensor = Float[Tensor, "time ..."]
 DynamicsFn = Callable[[StateTensor], StateTensor]
 
 # StepFn advances the current state by one discrete rollout step.
-StepFn = Callable[[StateTensor], StateTensor]
+StepFn = Callable[
+    [StateTensor], StateTensor | tuple[StateTensor, StateTensor, StateTensor]
+]
 
 # AccelerationFn returns acceleration from positions plus optional physics args.
 AccelerationFn = Callable[..., StateTensor]
 
 # IntegratorFn advances a state using a continuous-time dynamics function.
-IntegratorFn = Callable[[StateTensor, DynamicsFn, float], StateTensor]
+IntegratorFn = Callable[
+    ...,
+    StateTensor | tuple[StateTensor, StateTensor, StateTensor],
+]
 
 # Physical N-body trajectory tensors used by metrics.
 BodyStateTensor = Float[Tensor, "*batch time bodies dim"]

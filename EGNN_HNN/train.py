@@ -12,6 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from common.experiment_runs import prepare_run_outputs, save_json
 from common.mlflow_logger import MLflowLogger
+from common.splits import load_split_manifest, resolve_project_path
 from EGNN_HNN.graph_builder import build_graph
 from EGNN_HNN.models.graph_network import EncodeProcessDecode
 
@@ -31,7 +32,7 @@ def parse_args():
     )
     parser.add_argument(
         "--dataset-path",
-        default=str(PROJECT_ROOT / "common" / "nbody_3body_dataset.pt"),
+        default=str(PROJECT_ROOT / "common" / "datasets" / "nbody_dataset.pt"),
     )
     parser.add_argument(
         "--checkpoint-path",
@@ -40,7 +41,11 @@ def parse_args():
         ),
         help="Checkpoint path for the best one-step model.",
     )
-    parser.add_argument("--num-train-trajectories", type=int, default=None)
+    parser.add_argument(
+        "--split-path",
+        default=str(PROJECT_ROOT / "experiments" / "splits" / "nbody_dataset.json"),
+        help="Trajectory-level train/validation/test split manifest.",
+    )
     parser.add_argument(
         "--num-validation-samples",
         type=int,
@@ -125,8 +130,9 @@ def evaluate_validation(
     # Accumulate normalized force MSE across the fixed validation samples.
     total_force_loss = 0.0
 
-    # Accumulate physical acceleration MSE for comparison with EGNS.
-    total_acceleration_loss = 0.0
+    # Accumulate physical squared error for the cross-family acceleration RMSE.
+    total_acceleration_squared_error = 0.0
+    total_acceleration_values = 0
 
     # Disable ordinary graph recording around validation. The model temporarily
     # re-enables gradients internally only to differentiate potential by position.
@@ -155,6 +161,7 @@ def evaluate_validation(
             )
 
             # Predict normalized force without constructing a higher-order graph.
+            # model uses torch.enable_grad so we can differentiate
             predicted_force_normalized = model(
                 graph,
                 create_graph=False,
@@ -172,17 +179,15 @@ def evaluate_validation(
             # Convert physical force to acceleration using a = F / m.
             predicted_acceleration = predicted_force / masses_t
 
-            # Measure physical acceleration error for a fair EGNS comparison.
-            acceleration_loss = F.mse_loss(
-                predicted_acceleration,
-                target_acceleration,
-            )
+            acceleration_squared_error = (
+                predicted_acceleration - target_acceleration
+            ).square()
 
             # Add this state's scalar normalized force loss to the running sum.
             total_force_loss += force_loss.item()
 
-            # Add this state's scalar acceleration loss to the running sum.
-            total_acceleration_loss += acceleration_loss.item()
+            total_acceleration_squared_error += acceleration_squared_error.sum().item()
+            total_acceleration_values += acceleration_squared_error.numel()
 
     # Restore training mode when the model entered this helper in training mode.
     if was_training:
@@ -194,7 +199,9 @@ def evaluate_validation(
     # Return both metrics as ordinary Python floats.
     return {
         "force_loss": total_force_loss / num_samples,
-        "acceleration_mse": total_acceleration_loss / num_samples,
+        "acceleration_rmse": (
+            total_acceleration_squared_error / total_acceleration_values
+        ) ** 0.5,
     }
 
 
@@ -223,75 +230,84 @@ def main():
     mlflow_logger.log_description(args.description)
     mlflow_logger.log_tags({"checkpoint_path": output_path, "run_dir": run_dir})
 
-    dataset = torch.load(args.dataset_path, map_location=device)
+    # Validate the shared manifest first, then build separate tensor views for
+    # optimization and fixed validation. Test trajectories are never materialized.
+    dataset_path = resolve_project_path(args.dataset_path)
+    split_path = resolve_project_path(args.split_path)
+    dataset = torch.load(dataset_path, map_location=device)
 
     positions = dataset["positions"].to(device)
-    velocities = dataset["velocities"].to(device)
     accelerations = dataset["accelerations"].to(device)
     masses = dataset["masses"].to(device)
     dt = dataset.get("metadata", {}).get("dt", 0.01)
     epsilon = dataset.get("metadata", {}).get("epsilon", 0)
 
+    num_trajectories, num_steps, _, dim = positions.shape
+    manifest, split_indices = load_split_manifest(
+        split_path=split_path,
+        dataset_path=dataset_path,
+        dataset_shape=positions.shape,
+    )
+
+    # The IDs in a seeded manifest are noncontiguous, so index explicitly rather
+    # than assuming train and validation are consecutive dataset ranges.
+    train_indices = split_indices["train"]
+    validation_trajectory_indices = split_indices["val"]
+    train_positions = positions[train_indices]
+    train_accelerations = accelerations[train_indices]
+    train_masses = masses[train_indices]
+    validation_positions = positions[validation_trajectory_indices]
+    validation_accelerations = accelerations[validation_trajectory_indices]
+    validation_masses = masses[validation_trajectory_indices]
+    num_train_trajectories = len(train_indices)
+    num_validation_trajectories = len(validation_trajectory_indices)
+
     sample_graph = build_graph(
-        positions=positions[0, 0],
-        masses=masses[0],
+        positions=train_positions[0, 0],
+        masses=train_masses[0],
     )
     node_input_dim = sample_graph["node_features"].shape[-1]
     edge_input_dim = sample_graph["edge_features"].shape[-1]
 
-    print("acc mean:", accelerations.mean().item())
-    print("acc std:", accelerations.std().item())
-    print("acc max abs:", accelerations.abs().max().item())
+    print("training acc mean:", train_accelerations.mean().item())
+    print("training acc std:", train_accelerations.std().item())
+    print("training acc max abs:", train_accelerations.abs().max().item())
     print(
         "acc 95th percentile:",
-        torch.quantile(accelerations.abs().flatten(), 0.95).item(),
+        torch.quantile(train_accelerations.abs().flatten(), 0.95).item(),
     )
     print(
         "acc 99th percentile:",
-        torch.quantile(accelerations.abs().flatten(), 0.99).item(),
+        torch.quantile(train_accelerations.abs().flatten(), 0.99).item(),
     )
-
-    num_trajectories, num_steps, _, dim = positions.shape
-
-    # When no explicit split is supplied, reserve the final 20% for validation.
-    if args.num_train_trajectories is None:
-        num_train_trajectories = max(1, int(0.8 * num_trajectories))
-    else:
-        # Prevent an oversized request from indexing beyond the loaded dataset.
-        num_train_trajectories = min(args.num_train_trajectories, num_trajectories)
-
-    # Training requires at least one trajectory.
-    if num_train_trajectories <= 0:
-        raise ValueError("num-train-trajectories must be positive.")
-
-    # Fixed validation requires at least one trajectory outside the training split.
-    if num_train_trajectories >= num_trajectories:
-        raise ValueError(
-            "num-train-trajectories must leave at least one trajectory for validation."
-        )
 
     # Validation averaging requires at least one fixed sample.
     if args.num_validation_samples <= 0:
         raise ValueError("num-validation-samples must be positive.")
 
-    # Convert every state in the training split from acceleration to force.
-    training_forces = accelerations[:num_train_trajectories] * masses[
-        :num_train_trajectories
-    ].unsqueeze(1)
+    # Convert only training states from acceleration to force. This keeps the
+    # validation/test force distribution out of the learned normalization.
+    training_forces = train_accelerations * train_masses.unsqueeze(1)
 
     # Use one global scalar so force normalization preserves rotational symmetry.
     force_std = training_forces.std().clamp_min(1e-8).reshape(1)
 
     mlflow_logger.log_params({
         "data": {
+            "dataset_path": str(dataset_path),
             "num_trajectories": num_trajectories,
             "num_steps": num_steps,
             "dim": dim,
             "num_train_trajectories": num_train_trajectories,
-            "num_validation_trajectories": num_trajectories - num_train_trajectories,
+            "num_validation_trajectories": num_validation_trajectories,
+            "num_test_trajectories": len(split_indices["test"]),
             "num_validation_samples": args.num_validation_samples,
             "dt": dt,
             "epsilon": epsilon,
+        },
+        "split": {
+            "manifest_path": str(split_path),
+            **manifest.get("split_config", {}),
         },
         "model": {
             "node_input_dim": node_input_dim,
@@ -300,9 +316,11 @@ def main():
         },
     })
 
+    # Node and edge normalization must follow the same train-only rule as force
+    # normalization, so pass the explicit training views here.
     node_mean, node_std, edge_mean, edge_std = compute_graph_feature_stats(
-        positions=positions,
-        masses=masses,
+        positions=train_positions,
+        masses=train_masses,
         num_train_trajectories=num_train_trajectories,
     )
 
@@ -327,16 +345,13 @@ def main():
     max_seconds = None if args.max_hours is None else args.max_hours * 60 * 60
     stop_training = False
 
-    # The validation split begins immediately after the training trajectories.
-    validation_start = num_train_trajectories
-
     # Create a CPU generator so validation sampling is reproducible on any device.
     validation_generator = torch.Generator().manual_seed(args.validation_seed)
 
-    # Choose validation trajectories only from the held-out portion of the dataset.
+    # Choose local trajectory IDs only from the manifest validation tensors.
     validation_trajectories = torch.randint(
-        validation_start,
-        num_trajectories,
+        0,
+        num_validation_trajectories,
         (args.num_validation_samples,),
         generator=validation_generator,
     )
@@ -356,6 +371,12 @@ def main():
             validation_times.tolist(),
         )
     )
+    # Validation runs on compact validation tensors, but checkpoints store the
+    # corresponding global IDs so the sampled states are easy to audit later.
+    validation_global_indices = [
+        (validation_trajectory_indices[traj_idx], time_idx)
+        for traj_idx, time_idx in validation_indices
+    ]
 
     print("training trajectories:", num_train_trajectories)
     if max_seconds is not None:
@@ -367,7 +388,7 @@ def main():
     # Initialize final metrics for the run summary.
     last_train_loss = float("nan")
     last_validation_force_loss = float("nan")
-    last_validation_acceleration_mse = float("nan")
+    last_validation_acceleration_rmse = float("nan")
 
     for epoch in range(args.num_epochs):
         total_loss = 0.0
@@ -385,9 +406,9 @@ def main():
                 traj_idx = torch.randint(0, num_train_trajectories, (1,)).item()
                 time_idx = torch.randint(0, num_steps, (1,)).item()
 
-                positions_t = positions[traj_idx, time_idx]
-                masses_t = masses[traj_idx]
-                target_force = accelerations[traj_idx, time_idx] * masses_t
+                positions_t = train_positions[traj_idx, time_idx]
+                masses_t = train_masses[traj_idx]
+                target_force = train_accelerations[traj_idx, time_idx] * masses_t
 
                 target_force_normalized = target_force / force_std.squeeze()
 
@@ -418,9 +439,9 @@ def main():
         # Evaluate the same held-out states after every epoch.
         validation_metrics = evaluate_validation(
             model=model,
-            positions=positions,
-            accelerations=accelerations,
-            masses=masses,
+            positions=validation_positions,
+            accelerations=validation_accelerations,
+            masses=validation_masses,
             force_std=force_std,
             validation_indices=validation_indices,
         )
@@ -428,14 +449,14 @@ def main():
         # Extract normalized validation force MSE for model selection.
         validation_force_loss = validation_metrics["force_loss"]
 
-        # Extract physical acceleration MSE for comparison with EGNS.
-        validation_acceleration_mse = validation_metrics["acceleration_mse"]
+        # Extract physical acceleration RMSE for cross-family comparison.
+        validation_acceleration_rmse = validation_metrics["acceleration_rmse"]
 
         # Record the latest completed epoch and its metrics for the run summary.
         epochs_completed = epoch + 1
         last_train_loss = avg_loss
         last_validation_force_loss = validation_force_loss
-        last_validation_acceleration_mse = validation_acceleration_mse
+        last_validation_acceleration_rmse = validation_acceleration_rmse
 
         # Save only when the fixed validation force loss reaches a new minimum.
         if validation_force_loss < best_validation_loss:
@@ -461,13 +482,22 @@ def main():
                     "num_epochs": args.num_epochs,
                     "learning_rate": args.learning_rate,
                     "num_train_trajectories": num_train_trajectories,
+                    "num_validation_trajectories": num_validation_trajectories,
+                    "num_test_trajectories": len(split_indices["test"]),
                     "num_validation_samples": args.num_validation_samples,
                     "validation_seed": args.validation_seed,
+                    "validation_indices": validation_global_indices,
+                    "validation_local_indices": validation_indices,
+                    "split_path": str(split_path),
+                    "split_seed": manifest.get("split_config", {}).get("split_seed"),
                 },
+                # Store the exact train/validation/test assignment with the best
+                # validation checkpoint for reproducible downstream rollouts.
+                "split_manifest": manifest,
+                "dataset_metadata": dataset.get("metadata", {}),
                 "train_loss_at_best": avg_loss,
-                "best_loss": best_validation_loss,
-                "best_validation_force_loss": best_validation_loss,
-                "validation_acceleration_mse_at_best": validation_acceleration_mse,
+                "best_validation_normalized_force_mse": best_validation_loss,
+                "validation_acceleration_rmse_at_best": validation_acceleration_rmse,
             }
 
             # Write the best validation checkpoint to the configured path.
@@ -485,10 +515,10 @@ def main():
         # Log directly comparable training and fixed-validation metrics.
         mlflow_logger.log_metrics(
             {
-                "train_loss": avg_loss,
-                "validation_force_loss": validation_force_loss,
-                "validation_acceleration_mse": validation_acceleration_mse,
-                "best_validation_force_loss": best_validation_loss,
+                "train_normalized_force_mse": avg_loss,
+                "validation_normalized_force_mse": validation_force_loss,
+                "validation_acceleration_rmse": validation_acceleration_rmse,
+                "best_validation_normalized_force_mse": best_validation_loss,
                 "steps_completed": steps_completed,
                 "elapsed_hours": elapsed_hours,
             },
@@ -497,9 +527,9 @@ def main():
         print(
             f"Epoch {epoch + 1}/{args.num_epochs}, "
             f"steps = {steps_completed}, "
-            f"train loss = {avg_loss:.6f}, "
-            f"validation force loss = {validation_force_loss:.6f}, "
-            f"validation acceleration MSE = {validation_acceleration_mse:.6f}, "
+            f"train normalized force MSE = {avg_loss:.6f}, "
+            f"validation normalized force MSE = {validation_force_loss:.6f}, "
+            f"validation acceleration RMSE = {validation_acceleration_rmse:.6f}, "
             f"elapsed = {elapsed_hours:.2f}h"
         )
 
@@ -509,11 +539,10 @@ def main():
 
     # Summarize the completed run for JSON and MLflow output.
     metrics = {
-        "best_loss": best_validation_loss,
-        "best_validation_force_loss": best_validation_loss,
-        "final_train_loss": last_train_loss,
-        "final_validation_force_loss": last_validation_force_loss,
-        "final_validation_acceleration_mse": last_validation_acceleration_mse,
+        "best_validation_normalized_force_mse": best_validation_loss,
+        "final_train_normalized_force_mse": last_train_loss,
+        "final_validation_normalized_force_mse": last_validation_force_loss,
+        "final_validation_acceleration_rmse": last_validation_acceleration_rmse,
         "epochs_completed": epochs_completed,
         "checkpoint_path": str(output_path),
     }

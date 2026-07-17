@@ -7,11 +7,8 @@ from pathlib import Path
 import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-EGNS_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-if str(EGNS_ROOT) not in sys.path:
-    sys.path.insert(0, str(EGNS_ROOT))
 
 from common.rollout.differentiable import rollout_steps
 from common.experiment_runs import prepare_run_outputs, save_json
@@ -28,9 +25,13 @@ from common.splits import (
     resolve_project_path,
     validate_checkpoint_split,
 )
-from models.graph_network import EncodeProcessDecode
-from models.learned_simulator import LearnedSimulator
-from rollouts.gns_adapter import make_gns_step_fn, pack_gns_state, unpack_gns_state
+from SETNODE.models.graph_network import EncodeProcessDecode
+from SETNODE.models.learned_simulator import LearnedSimulator
+from SETNODE.rollouts.gns_adapter import (
+    make_gns_step_fn,
+    pack_gns_state,
+    unpack_gns_state,
+)
 
 
 def get_device():
@@ -44,7 +45,7 @@ def get_device():
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Fine-tune a pretrained EGNS with differentiable rollout loss."
+        description="Fine-tune a pretrained SETNODE with differentiable rollout loss."
     )
     parser.add_argument(
         "--dataset-path",
@@ -53,14 +54,14 @@ def parse_args():
     parser.add_argument(
         "--checkpoint-path",
         default=str(
-            PROJECT_ROOT / "experiments" / "checkpoints" / "egns" / "one_step.pt"
+            PROJECT_ROOT / "experiments" / "checkpoints" / "setnode" / "one_step.pt"
         ),
-        help="Pretrained one-step EGNS checkpoint to fine-tune.",
+        help="Pretrained one-step SETNODE checkpoint to fine-tune.",
     )
     parser.add_argument(
         "--output-path",
         default=str(
-            PROJECT_ROOT / "experiments" / "checkpoints" / "egns" / "rollout.pt"
+            PROJECT_ROOT / "experiments" / "checkpoints" / "setnode" / "rollout.pt"
         ),
         help="Checkpoint path for the best rollout fine-tuned model.",
     )
@@ -91,7 +92,7 @@ def parse_args():
         "--dynamics-loss-weight",
         type=float,
         default=1.0,
-        help="Weight for calibrated normalized acceleration MSE on true states.",
+        help="Weight for calibrated normalized force MSE on true states.",
     )
     parser.add_argument("--num-loss-calibration-samples", type=int, default=50)
     parser.add_argument("--loss-calibration-seed", type=int, default=4321)
@@ -123,34 +124,33 @@ def load_checkpoint(
     split_manifest=None,
 ):
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    # A fine-tuning run must inherit the one-step checkpoint's partition; using
-    # another manifest could silently turn prior validation/test data into train.
+    # Prevent rollout fine-tuning from using a different partition than the
+    # one-step checkpoint that supplied the learned potential model.
     if split_manifest is not None:
         validate_checkpoint_split(checkpoint, split_manifest)
 
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         model_state_dict = checkpoint["model_state_dict"]
-        acc_mean = checkpoint["acc_mean"].to(device)
-        acc_std = checkpoint["acc_std"].to(device)
+        force_std = checkpoint["force_std"].to(device)
         config = checkpoint["model_config"]
         dt = checkpoint.get("dt", dataset.get("metadata", {}).get("dt", 0.01))
     elif isinstance(checkpoint, dict):
         print("Loaded older raw state_dict checkpoint.")
-        print(
-            "Using default model config and recomputing acc_mean/acc_std from dataset."
-        )
+        print("Using default model config and recomputing force_std from dataset.")
 
         model_state_dict = checkpoint
         accelerations = dataset["accelerations"].to(device)
-        # Legacy raw checkpoints do not contain normalization. Reconstruct it
-        # from manifest training trajectories rather than from the full dataset.
+        masses = dataset["masses"].to(device)
+        # Legacy raw checkpoints lack force normalization, so rebuild it from
+        # manifest training trajectories rather than from held-out data.
         if train_indices is not None:
             accelerations = accelerations[train_indices]
-        positions = dataset["positions"]
-        _, _, num_bodies, dim = positions.shape
+            masses = masses[train_indices]
+        positions = dataset["positions"].to(device)
+        _, _, _, dim = positions.shape
 
-        acc_mean = torch.zeros(1, 1, 1, 1, device=device, dtype=accelerations.dtype)
-        acc_std = accelerations.std().clamp_min(1e-8).view(1, 1, 1, 1)
+        forces = accelerations * masses.unsqueeze(1)
+        force_std = forces.std().clamp_min(1e-8).view(1, 1, 1, 1)
         processor_indices = {
             int(key.split(".")[1])
             for key in model_state_dict
@@ -164,6 +164,11 @@ def load_checkpoint(
             "latent_dim": model_state_dict["node_encoder.net.4.weight"].shape[0],
             "hidden_dim": model_state_dict["node_encoder.net.0.weight"].shape[0],
             "num_message_passing_steps": len(processor_indices),
+            "num_hidden_layers": 2,
+            "distance_dim": 16,
+            "ffn_dim": 256,
+            "num_heads": 4,
+            "epsilon": dataset.get("metadata", {}).get("epsilon", 0.15),
         }
         dt = dataset.get("metadata", {}).get("dt", 0.01)
     else:
@@ -189,28 +194,31 @@ def load_checkpoint(
             config["edge_input_dim"], device=device
         )
 
-    return model_state_dict, acc_mean, acc_std, config, dt
+    return model_state_dict, force_std, config, dt
 
 
-def build_simulator(model_state_dict, acc_mean, acc_std, config, dt, device):
+def build_simulator(model_state_dict, force_std, config, dt, device):
     graph_network = EncodeProcessDecode(
         node_input_dim=config["node_input_dim"],
         edge_input_dim=config["edge_input_dim"],
-        output_dim=config["output_dim"],
         latent_dim=config["latent_dim"],
         hidden_dim=config["hidden_dim"],
         num_message_passing_steps=config["num_message_passing_steps"],
+        num_hidden_layers=config.get("num_hidden_layers", 2),
+        distance_dim=config.get("distance_dim", 16),
+        ffn_dim=config.get("ffn_dim", 256),
+        num_heads=config.get("num_heads", 4),
         node_mean=model_state_dict.get("node_mean"),
         node_std=model_state_dict.get("node_std"),
         edge_mean=model_state_dict.get("edge_mean"),
         edge_std=model_state_dict.get("edge_std"),
+        epsilon=config.get("epsilon", 0.15),
     ).to(device)
     graph_network.load_state_dict(model_state_dict)
 
     simulator = LearnedSimulator(
         graph_network=graph_network,
-        acc_mean=acc_mean,
-        acc_std=acc_std,
+        force_std=force_std,
         dt=dt,
         edge_feature_dim=config["edge_input_dim"],
     ).to(device)
@@ -224,7 +232,7 @@ def evaluate_validation_rollout(
     velocities,
     accelerations,
     masses,
-    acc_std,
+    force_std,
     dim,
     num_rollout_steps,
     velocity_loss_weight,
@@ -239,6 +247,8 @@ def evaluate_validation_rollout(
     total_position_mse = 0.0
     total_dynamics_mse = 0.0
 
+    # The potential model locally enables coordinate gradients to compute force,
+    # while eval mode disables the higher-order graph used for parameter updates.
     with torch.no_grad():
         for traj_idx, time_idx in validation_windows:
             positions_t = positions[traj_idx, time_idx]
@@ -277,11 +287,11 @@ def evaluate_validation_rollout(
                 velocities=target_velocities[:-1],
                 target_accelerations=target_accelerations,
                 masses=masses_t,
-                predict_acceleration=lambda position, velocity: simulator.predict_acceleration(
-                    position, velocity, masses_t
+                predict_acceleration=lambda position, _velocity: simulator.predict_acceleration(
+                    position, masses_t
                 ),
-                normalization_scale=acc_std,
-                target_kind="acceleration",
+                normalization_scale=force_std,
+                target_kind="force",
             )
             loss = composite_rollout_loss(
                 position_mse,
@@ -318,7 +328,7 @@ def main():
 
     output_path, run_dir, metrics_path = prepare_run_outputs(
         project_root=PROJECT_ROOT,
-        run_name="egns_rollout",
+        run_name="setnode_rollout",
         args=args,
         output_path=args.output_path,
     )
@@ -327,17 +337,17 @@ def main():
 
     mlflow_logger = MLflowLogger(
         project_root=PROJECT_ROOT,
-        experiment_name="egns_rollout",
+        experiment_name="setnode_rollout",
         run_name=run_dir.name if run_dir is not None else output_path.stem,
-        tags={"model": "EGNS", "training_stage": "rollout", "device": device},
+        tags={"model": "SETNODE", "training_stage": "rollout", "device": device},
         enabled=not args.disable_mlflow,
     ).start()
     mlflow_logger.log_params(args)
     mlflow_logger.log_description(args.description)
     mlflow_logger.log_tags({"checkpoint_path": output_path, "run_dir": run_dir})
 
-    # Load the same manifest used by one-step training and keep validation/test
-    # IDs out of every differentiable rollout optimization window.
+    # Reuse the shared manifest and restrict every rollout window to its
+    # training IDs; validation and test trajectories remain held out.
     dataset_path = resolve_project_path(args.dataset_path)
     split_path = resolve_project_path(args.split_path)
     checkpoint_path = resolve_project_path(args.checkpoint_path)
@@ -391,7 +401,7 @@ def main():
         },
     })
 
-    model_state_dict, acc_mean, acc_std, config, dt = load_checkpoint(
+    model_state_dict, force_std, config, dt = load_checkpoint(
         checkpoint_path,
         dataset,
         device,
@@ -401,8 +411,7 @@ def main():
     mlflow_logger.log_params({"pretrained_model": config, "data": {"dt": dt}})
     graph_network, simulator = build_simulator(
         model_state_dict,
-        acc_mean,
-        acc_std,
+        force_std,
         config,
         dt,
         device,
@@ -451,7 +460,7 @@ def main():
         velocities=velocities,
         accelerations=accelerations,
         masses=masses,
-        acc_std=acc_std,
+        force_std=force_std,
         dim=dim,
         num_rollout_steps=args.num_rollout_steps,
         velocity_loss_weight=0.0,
@@ -470,7 +479,7 @@ def main():
             "baseline_position_mse": calibration_metrics["position_mse"],
             "baseline_dynamics_mse": calibration_metrics["dynamics_mse"],
             "dynamics_position_scale": dynamics_position_scale,
-            "dynamics_target": "acceleration",
+            "dynamics_target": "force",
         }
     })
 
@@ -482,7 +491,7 @@ def main():
     print("fine-tuning from:", checkpoint_path)
     print("training trajectories:", num_train_trajectories)
     print("rollout steps:", args.num_rollout_steps)
-    print("dynamics loss target: normalized acceleration")
+    print("dynamics loss target: normalized force")
     print("dynamics-to-position scale:", dynamics_position_scale)
     if max_seconds is not None:
         print(f"max training time: {args.max_hours:.2f} hours")
@@ -504,8 +513,8 @@ def main():
             batch_dynamics_mse = 0.0
 
             for _ in range(args.batch_size):
-                # Split IDs are seeded but noncontiguous, so sample within the
-                # manifest list and map that location back to a dataset ID.
+                # Map a random location in the training list to the original,
+                # potentially noncontiguous dataset trajectory ID.
                 train_index = torch.randint(0, num_train_trajectories, (1,)).item()
                 traj_idx = train_indices[train_index]
                 time_idx = torch.randint(
@@ -550,11 +559,11 @@ def main():
                     velocities=target_velocities[:-1],
                     target_accelerations=target_accelerations,
                     masses=masses_t,
-                    predict_acceleration=lambda position, velocity: simulator.predict_acceleration(
-                        position, velocity, masses_t
+                    predict_acceleration=lambda position, _velocity: simulator.predict_acceleration(
+                        position, masses_t
                     ),
-                    normalization_scale=acc_std,
-                    target_kind="acceleration",
+                    normalization_scale=force_std,
+                    target_kind="force",
                 )
                 loss = composite_rollout_loss(
                     position_mse,
@@ -589,9 +598,7 @@ def main():
             break
 
         avg_train_loss = total_loss / steps_completed
-        train_rollout_position_rmse = math.sqrt(
-            total_position_mse / steps_completed
-        )
+        train_rollout_position_rmse = math.sqrt(total_position_mse / steps_completed)
         train_dynamics_rmse = math.sqrt(total_dynamics_mse / steps_completed)
         validation_metrics = evaluate_validation_rollout(
             simulator=simulator,
@@ -599,7 +606,7 @@ def main():
             velocities=validation_velocities,
             accelerations=validation_accelerations,
             masses=validation_masses,
-            acc_std=acc_std,
+            force_std=force_std,
             dim=dim,
             num_rollout_steps=args.num_rollout_steps,
             velocity_loss_weight=args.velocity_loss_weight,
@@ -615,8 +622,7 @@ def main():
             best_validation_loss = validation_rollout_loss
             checkpoint = {
                 "model_state_dict": graph_network.state_dict(),
-                "acc_mean": acc_mean,
-                "acc_std": acc_std,
+                "force_std": force_std,
                 "model_config": config,
                 "dt": dt,
                 "training_config": {
@@ -626,7 +632,7 @@ def main():
                     "learning_rate": args.learning_rate,
                     "velocity_loss_weight": args.velocity_loss_weight,
                     "dynamics_loss_weight": args.dynamics_loss_weight,
-                    "dynamics_target": "acceleration",
+                    "dynamics_target": "force",
                     "dynamics_position_scale": dynamics_position_scale,
                     "baseline_position_mse": calibration_metrics["position_mse"],
                     "baseline_dynamics_mse": calibration_metrics["dynamics_mse"],
@@ -643,7 +649,7 @@ def main():
                     "split_path": str(split_path),
                     "split_seed": manifest.get("split_config", {}).get("split_seed"),
                 },
-                # Preserve split provenance in the rollout-fine-tuned checkpoint.
+                # Carry split provenance into the fine-tuned checkpoint.
                 "split_manifest": manifest,
                 "dataset_metadata": dataset.get("metadata", {}),
                 "train_rollout_loss_at_best": avg_train_loss,
@@ -675,10 +681,10 @@ def main():
             f"steps = {steps_completed}, "
             f"train rollout objective = {avg_train_loss:.6e}, "
             f"train rollout position RMSE = {train_rollout_position_rmse:.6e}, "
-            f"train normalized acceleration RMSE = {train_dynamics_rmse:.6e}, "
+            f"train normalized force RMSE = {train_dynamics_rmse:.6e}, "
             f"validation rollout objective = {validation_rollout_loss:.6e}, "
             f"validation rollout position RMSE = {validation_rollout_position_rmse:.6e}, "
-            f"validation normalized acceleration RMSE = {validation_dynamics_rmse:.6e}, "
+            f"validation normalized force RMSE = {validation_dynamics_rmse:.6e}, "
             f"elapsed = {elapsed_hours:.2f}h"
         )
 

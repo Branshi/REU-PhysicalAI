@@ -16,14 +16,25 @@ if str(HNN_ROOT) not in sys.path:
 from common.experiment_runs import prepare_run_outputs, save_json
 from common.mlflow_logger import MLflowLogger
 from common.rollout.differentiable import rollout_steps
-from common.rollout.losses import rollout_mse
+from common.rollout.losses import (
+    composite_rollout_loss,
+    dynamics_to_position_scale,
+    rollout_mse,
+    sample_rollout_windows,
+    teacher_forced_dynamics_mse,
+)
 from common.splits import (
     load_split_manifest,
     resolve_project_path,
     validate_checkpoint_split,
 )
 from models.hamiltonian_network import HNN
-from rollouts.hnn_adapter import make_hnn_step_fn, pack_hnn_state, unpack_hnn_state
+from rollouts.hnn_adapter import (
+    make_hnn_acceleration_fn,
+    make_hnn_step_fn,
+    pack_hnn_state,
+    unpack_hnn_state,
+)
 
 
 def get_device():
@@ -61,6 +72,18 @@ def parse_args():
         default=str(PROJECT_ROOT / "experiments" / "splits" / "nbody_dataset.json"),
         help="Trajectory-level train/validation/test split manifest.",
     )
+    parser.add_argument(
+        "--num-validation-samples",
+        type=int,
+        default=100,
+        help="Number of fixed validation rollout windows evaluated after each epoch.",
+    )
+    parser.add_argument(
+        "--validation-seed",
+        type=int,
+        default=1234,
+        help="Seed used once to choose the fixed validation rollout windows.",
+    )
     parser.add_argument("--num-rollout-steps", type=int, default=3)
     parser.add_argument("--steps-per-epoch", type=int, default=200)
     parser.add_argument("--batch-size", type=int, default=2)
@@ -73,6 +96,14 @@ def parse_args():
         default=None,
         help="Deprecated alias for --velocity-loss-weight.",
     )
+    parser.add_argument(
+        "--dynamics-loss-weight",
+        type=float,
+        default=1.0,
+        help="Weight for calibrated normalized force MSE on true states.",
+    )
+    parser.add_argument("--num-loss-calibration-samples", type=int, default=50)
+    parser.add_argument("--loss-calibration-seed", type=int, default=4321)
     parser.add_argument("--grad-clip-norm", type=float, default=None)
     parser.add_argument(
         "--max-hours",
@@ -192,6 +223,122 @@ def load_checkpoint(
     return model, model_config, force_std, dt
 
 
+def evaluate_validation_rollout(
+    model,
+    positions,
+    velocities,
+    accelerations,
+    masses,
+    force_std,
+    dt,
+    num_bodies,
+    dim,
+    num_rollout_steps,
+    velocity_loss_weight,
+    dynamics_loss_weight,
+    dynamics_position_scale,
+    validation_windows,
+):
+    was_training = model.training
+    model.eval()
+
+    total_loss = 0.0
+    total_position_mse = 0.0
+    total_dynamics_mse = 0.0
+
+    # HNN.force locally enables coordinate gradients to compute force, while
+    # eval mode disables the higher-order graph used for parameter updates.
+    with torch.no_grad():
+        for traj_idx, time_idx in validation_windows:
+            positions_t = positions[traj_idx, time_idx]
+            velocities_t = velocities[traj_idx, time_idx]
+            masses_t = masses[traj_idx]
+
+            initial_state = pack_hnn_state(positions_t, velocities_t)
+            step_fn = make_hnn_step_fn(
+                model=model,
+                masses=masses_t,
+                force_std=force_std,
+                dt=dt,
+                num_bodies=num_bodies,
+                dim=dim,
+            )
+            predicted_states = rollout_steps(
+                initial_state=initial_state,
+                step_fn=step_fn,
+                num_steps=num_rollout_steps,
+                detach_between_steps=False,
+            )
+            predicted_positions, predicted_velocities = unpack_hnn_state(
+                predicted_states,
+                num_bodies=num_bodies,
+                dim=dim,
+            )
+
+            if predicted_positions.shape[1] == 1:
+                predicted_positions = predicted_positions.squeeze(1)
+                predicted_velocities = predicted_velocities.squeeze(1)
+
+            target_start = time_idx
+            target_end = time_idx + num_rollout_steps + 1
+            target_positions = positions[traj_idx, target_start:target_end]
+            target_velocities = velocities[traj_idx, target_start:target_end]
+            target_accelerations = accelerations[
+                traj_idx, target_start : target_end - 1
+            ]
+
+            position_mse = rollout_mse(
+                predicted_positions[1:], target_positions[1:]
+            )
+            velocity_mse = rollout_mse(
+                predicted_velocities[1:], target_velocities[1:]
+            )
+            predict_acceleration = make_hnn_acceleration_fn(
+                model=model,
+                masses=masses_t,
+                force_std=force_std,
+                num_bodies=num_bodies,
+                dim=dim,
+            )
+            dynamics_mse = teacher_forced_dynamics_mse(
+                positions=target_positions[:-1],
+                velocities=target_velocities[:-1],
+                target_accelerations=target_accelerations,
+                masses=masses_t,
+                predict_acceleration=lambda position, _velocity: predict_acceleration(
+                    position
+                ),
+                normalization_scale=force_std,
+                target_kind="force",
+            )
+            loss = composite_rollout_loss(
+                position_mse,
+                velocity_mse=velocity_mse,
+                velocity_loss_weight=velocity_loss_weight,
+                dynamics_mse=dynamics_mse,
+                dynamics_loss_weight=dynamics_loss_weight,
+                dynamics_position_scale=dynamics_position_scale,
+            )
+
+            total_loss += loss.item()
+            total_position_mse += position_mse.item()
+            total_dynamics_mse += dynamics_mse.item()
+
+    if was_training:
+        model.train()
+
+    num_windows = len(validation_windows)
+    mean_position_mse = total_position_mse / num_windows
+    mean_dynamics_mse = total_dynamics_mse / num_windows
+    return {
+        "objective": total_loss / num_windows,
+        "position_mse": mean_position_mse,
+        "position_rmse": mean_position_mse**0.5,
+        "dynamics_mse": mean_dynamics_mse,
+        "dynamics_rmse": mean_dynamics_mse**0.5,
+    }
+
+
 def main():
     args = parse_args()
     velocity_loss_weight = resolve_velocity_loss_weight(args)
@@ -225,6 +372,7 @@ def main():
     dataset = torch.load(dataset_path, map_location=device)
     positions = dataset["positions"].to(device)
     velocities = dataset["velocities"].to(device)
+    accelerations = dataset["accelerations"].to(device)
     masses = dataset["masses"].to(device)
 
     num_trajectories, num_steps, num_bodies, dim = positions.shape
@@ -234,7 +382,13 @@ def main():
         dataset_shape=positions.shape,
     )
     train_indices = split_indices["train"]
+    validation_trajectory_indices = split_indices["val"]
+    validation_positions = positions[validation_trajectory_indices]
+    validation_velocities = velocities[validation_trajectory_indices]
+    validation_accelerations = accelerations[validation_trajectory_indices]
+    validation_masses = masses[validation_trajectory_indices]
     num_train_trajectories = len(train_indices)
+    num_validation_trajectories = len(validation_trajectory_indices)
 
     if args.num_rollout_steps <= 0:
         raise ValueError("num-rollout-steps must be positive.")
@@ -243,6 +397,10 @@ def main():
             "num-rollout-steps must be smaller than the number of saved "
             f"trajectory steps. Got {args.num_rollout_steps} for {num_steps} steps."
         )
+    if args.dynamics_loss_weight < 0.0:
+        raise ValueError("dynamics-loss-weight must be nonnegative.")
+    if args.num_loss_calibration_samples <= 0:
+        raise ValueError("num-loss-calibration-samples must be positive.")
 
     model, model_config, force_std, dt = load_checkpoint(
         checkpoint_path,
@@ -260,6 +418,7 @@ def main():
             "num_train_trajectories": num_train_trajectories,
             "num_val_trajectories": len(split_indices["val"]),
             "num_test_trajectories": len(split_indices["test"]),
+            "num_validation_samples": args.num_validation_samples,
             "dt": dt,
         },
         "split": {
@@ -271,7 +430,72 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     model.train()
 
-    best_loss = float("inf")
+    if args.num_validation_samples <= 0:
+        raise ValueError("num-validation-samples must be positive.")
+
+    validation_generator = torch.Generator().manual_seed(args.validation_seed)
+    validation_trajectories = torch.randint(
+        0,
+        num_validation_trajectories,
+        (args.num_validation_samples,),
+        generator=validation_generator,
+    )
+    validation_times = torch.randint(
+        0,
+        num_steps - args.num_rollout_steps,
+        (args.num_validation_samples,),
+        generator=validation_generator,
+    )
+    validation_windows = list(
+        zip(
+            validation_trajectories.tolist(),
+            validation_times.tolist(),
+        )
+    )
+    validation_global_windows = [
+        (validation_trajectory_indices[traj_idx], time_idx)
+        for traj_idx, time_idx in validation_windows
+    ]
+
+    calibration_windows = sample_rollout_windows(
+        train_indices,
+        num_steps=num_steps,
+        rollout_horizon=args.num_rollout_steps,
+        num_samples=args.num_loss_calibration_samples,
+        seed=args.loss_calibration_seed,
+    )
+    calibration_metrics = evaluate_validation_rollout(
+        model=model,
+        positions=positions,
+        velocities=velocities,
+        accelerations=accelerations,
+        masses=masses,
+        force_std=force_std,
+        dt=dt,
+        num_bodies=num_bodies,
+        dim=dim,
+        num_rollout_steps=args.num_rollout_steps,
+        velocity_loss_weight=0.0,
+        dynamics_loss_weight=0.0,
+        dynamics_position_scale=1.0,
+        validation_windows=calibration_windows,
+    )
+    dynamics_position_scale = dynamics_to_position_scale(
+        calibration_metrics["position_mse"],
+        calibration_metrics["dynamics_mse"],
+    )
+    mlflow_logger.log_params({
+        "loss_calibration": {
+            "num_samples": args.num_loss_calibration_samples,
+            "seed": args.loss_calibration_seed,
+            "baseline_position_mse": calibration_metrics["position_mse"],
+            "baseline_dynamics_mse": calibration_metrics["dynamics_mse"],
+            "dynamics_position_scale": dynamics_position_scale,
+            "dynamics_target": "force",
+        }
+    })
+
+    best_validation_loss = float("inf")
     start_time = time.monotonic()
     max_seconds = None if args.max_hours is None else args.max_hours * 60 * 60
     stop_training = False
@@ -279,12 +503,15 @@ def main():
     print("fine-tuning from:", checkpoint_path)
     print("training trajectories:", num_train_trajectories)
     print("rollout steps:", args.num_rollout_steps)
+    print("dynamics loss target: normalized force")
+    print("dynamics-to-position scale:", dynamics_position_scale)
     if max_seconds is not None:
         print(f"max training time: {args.max_hours:.2f} hours")
 
     for epoch in range(1, args.epochs + 1):
         total_loss = 0.0
         total_position_mse = 0.0
+        total_dynamics_mse = 0.0
         steps_completed = 0
 
         for _ in range(args.steps_per_epoch):
@@ -295,6 +522,7 @@ def main():
             optimizer.zero_grad()
             batch_loss = torch.zeros((), device=device)
             batch_position_mse = 0.0
+            batch_dynamics_mse = 0.0
 
             for _ in range(args.batch_size):
                 train_index = torch.randint(0, num_train_trajectories, (1,)).item()
@@ -338,19 +566,46 @@ def main():
                 target_end = time_idx + args.num_rollout_steps + 1
                 target_positions = positions[traj_idx, target_start:target_end]
                 target_velocities = velocities[traj_idx, target_start:target_end]
+                target_accelerations = accelerations[
+                    traj_idx, target_start : target_end - 1
+                ]
 
                 position_mse = rollout_mse(
                     predicted_positions[1:], target_positions[1:]
                 )
-                loss = position_mse
-                if velocity_loss_weight > 0.0:
-                    loss = loss + velocity_loss_weight * rollout_mse(
-                        predicted_velocities[1:],
-                        target_velocities[1:],
-                    )
+                velocity_mse = rollout_mse(
+                    predicted_velocities[1:], target_velocities[1:]
+                )
+                predict_acceleration = make_hnn_acceleration_fn(
+                    model=model,
+                    masses=masses_t,
+                    force_std=force_std,
+                    num_bodies=num_bodies,
+                    dim=dim,
+                )
+                dynamics_mse = teacher_forced_dynamics_mse(
+                    positions=target_positions[:-1],
+                    velocities=target_velocities[:-1],
+                    target_accelerations=target_accelerations,
+                    masses=masses_t,
+                    predict_acceleration=lambda position, _velocity: predict_acceleration(
+                        position
+                    ),
+                    normalization_scale=force_std,
+                    target_kind="force",
+                )
+                loss = composite_rollout_loss(
+                    position_mse,
+                    velocity_mse=velocity_mse,
+                    velocity_loss_weight=velocity_loss_weight,
+                    dynamics_mse=dynamics_mse,
+                    dynamics_loss_weight=args.dynamics_loss_weight,
+                    dynamics_position_scale=dynamics_position_scale,
+                )
 
                 batch_loss = batch_loss + loss
                 batch_position_mse += position_mse.item()
+                batch_dynamics_mse += dynamics_mse.item()
 
             batch_loss = batch_loss / args.batch_size
             batch_loss.backward()
@@ -365,17 +620,39 @@ def main():
 
             total_loss += batch_loss.item()
             total_position_mse += batch_position_mse / args.batch_size
+            total_dynamics_mse += batch_dynamics_mse / args.batch_size
             steps_completed += 1
 
         if steps_completed == 0:
             break
 
-        avg_loss = total_loss / steps_completed
+        avg_train_loss = total_loss / steps_completed
         train_rollout_position_rmse = math.sqrt(
             total_position_mse / steps_completed
         )
-        if avg_loss < best_loss:
-            best_loss = avg_loss
+        train_dynamics_rmse = math.sqrt(total_dynamics_mse / steps_completed)
+        validation_metrics = evaluate_validation_rollout(
+            model=model,
+            positions=validation_positions,
+            velocities=validation_velocities,
+            accelerations=validation_accelerations,
+            masses=validation_masses,
+            force_std=force_std,
+            dt=dt,
+            num_bodies=num_bodies,
+            dim=dim,
+            num_rollout_steps=args.num_rollout_steps,
+            velocity_loss_weight=velocity_loss_weight,
+            dynamics_loss_weight=args.dynamics_loss_weight,
+            dynamics_position_scale=dynamics_position_scale,
+            validation_windows=validation_windows,
+        )
+        validation_rollout_loss = validation_metrics["objective"]
+        validation_rollout_position_rmse = validation_metrics["position_rmse"]
+        validation_dynamics_rmse = validation_metrics["dynamics_rmse"]
+
+        if validation_rollout_loss < best_validation_loss:
+            best_validation_loss = validation_rollout_loss
             checkpoint = {
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
@@ -390,27 +667,45 @@ def main():
                     "lr": args.lr,
                     "num_rollout_steps": args.num_rollout_steps,
                     "velocity_loss_weight": velocity_loss_weight,
+                    "dynamics_loss_weight": args.dynamics_loss_weight,
+                    "dynamics_target": "force",
+                    "dynamics_position_scale": dynamics_position_scale,
+                    "baseline_position_mse": calibration_metrics["position_mse"],
+                    "baseline_dynamics_mse": calibration_metrics["dynamics_mse"],
+                    "num_loss_calibration_samples": args.num_loss_calibration_samples,
+                    "loss_calibration_seed": args.loss_calibration_seed,
                     "grad_clip_norm": args.grad_clip_norm,
                     "num_train_trajectories": num_train_trajectories,
                     "num_val_trajectories": len(split_indices["val"]),
                     "num_test_trajectories": len(split_indices["test"]),
+                    "num_validation_samples": args.num_validation_samples,
+                    "validation_seed": args.validation_seed,
+                    "validation_windows": validation_global_windows,
+                    "validation_local_windows": validation_windows,
                     "split_path": str(split_path),
                     "split_seed": manifest.get("split_config", {}).get("split_seed"),
                 },
                 "split_manifest": manifest,
                 "dataset_metadata": dataset.get("metadata", {}),
-                "best_rollout_objective": best_loss,
+                "train_rollout_loss_at_best": avg_train_loss,
+                "best_validation_rollout_objective": best_validation_loss,
+                "validation_rollout_position_rmse_at_best": validation_rollout_position_rmse,
+                "validation_dynamics_rmse_at_best": validation_dynamics_rmse,
             }
             torch.save(checkpoint, output_path)
             mlflow_logger.log_checkpoint(output_path)
-            print("Saved best rollout fine-tuned model.")
+            print("Saved best validation rollout fine-tuned model.")
 
         elapsed_hours = (time.monotonic() - start_time) / 3600
         mlflow_logger.log_metrics(
             {
-                "train_rollout_objective": avg_loss,
+                "train_rollout_objective": avg_train_loss,
                 "train_rollout_position_rmse": train_rollout_position_rmse,
-                "best_rollout_objective": best_loss,
+                "train_dynamics_rmse": train_dynamics_rmse,
+                "validation_rollout_objective": validation_rollout_loss,
+                "validation_rollout_position_rmse": validation_rollout_position_rmse,
+                "validation_dynamics_rmse": validation_dynamics_rmse,
+                "best_validation_rollout_objective": best_validation_loss,
                 "steps_completed": steps_completed,
                 "elapsed_hours": elapsed_hours,
             },
@@ -419,8 +714,12 @@ def main():
         print(
             f"Epoch {epoch}/{args.epochs}, "
             f"steps = {steps_completed}, "
-            f"train rollout objective = {avg_loss:.6e}, "
+            f"train rollout objective = {avg_train_loss:.6e}, "
             f"train rollout position RMSE = {train_rollout_position_rmse:.6e}, "
+            f"train normalized force RMSE = {train_dynamics_rmse:.6e}, "
+            f"validation rollout objective = {validation_rollout_loss:.6e}, "
+            f"validation rollout position RMSE = {validation_rollout_position_rmse:.6e}, "
+            f"validation normalized force RMSE = {validation_dynamics_rmse:.6e}, "
             f"elapsed = {elapsed_hours:.2f}h"
         )
 
@@ -429,7 +728,7 @@ def main():
             break
 
     metrics = {
-        "best_rollout_objective": best_loss,
+        "best_validation_rollout_objective": best_validation_loss,
         "epochs_completed": epoch,
         "checkpoint_path": str(output_path),
     }

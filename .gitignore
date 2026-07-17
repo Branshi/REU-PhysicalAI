@@ -32,6 +32,7 @@ experiments/checkpoints/
 experiments/old_checkpoints/
 experiments/runs/
 common/datasets/
+common/water3d/*.tfrecord
 
 # Generated animations and large media outputs
 *.mp4

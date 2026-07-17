@@ -66,6 +66,12 @@ def parse_args():
     parser.add_argument("--latent-dim", type=int, default=128)
     parser.add_argument("--num-messages", type=int, default=6)
     parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Seed for preprocessing, model initialization, and training sampling.",
+    )
+    parser.add_argument(
         "--max-hours",
         type=float,
         default=None,
@@ -203,6 +209,9 @@ def evaluate_validation(
 
 def main():
     args = parse_args()
+    # Seed preprocessing randomness. Model initialization and training sampling
+    # are reset onto independent streams below so preprocessing cannot perturb them.
+    torch.manual_seed(args.seed)
     device = get_device()
     print("Using device:", device)
 
@@ -321,6 +330,9 @@ def main():
         num_steps=num_steps,
     )
 
+    # Reset immediately before construction so every rerun starts this
+    # architecture from the same weights, independent of preprocessing draws.
+    torch.manual_seed(args.seed)
     model = EncodeProcessDecode(
         node_input_dim=node_input_dim,
         edge_input_dim=edge_input_dim,
@@ -336,6 +348,10 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
     model.train()
+
+    # Keep training-state sampling independent of model parameter count and all
+    # other random work performed before the optimization loop.
+    training_generator = torch.Generator(device="cpu").manual_seed(args.seed)
 
     best_loss = float("inf")
     start_time = time.monotonic()
@@ -394,8 +410,18 @@ def main():
             batch_loss = torch.zeros((), device=device)
 
             for _ in range(args.batch_size):
-                traj_idx = torch.randint(0, num_train_trajectories, (1,)).item()
-                time_idx = torch.randint(0, num_steps, (1,)).item()
+                traj_idx = torch.randint(
+                    0,
+                    num_train_trajectories,
+                    (1,),
+                    generator=training_generator,
+                ).item()
+                time_idx = torch.randint(
+                    0,
+                    num_steps,
+                    (1,),
+                    generator=training_generator,
+                ).item()
 
                 positions_t = train_positions[traj_idx, time_idx]
                 velocities_t = train_velocities[traj_idx, time_idx]
@@ -466,6 +492,7 @@ def main():
                     "batch_size": args.batch_size,
                     "num_epochs": args.num_epochs,
                     "learning_rate": args.learning_rate,
+                    "seed": args.seed,
                     "num_train_trajectories": num_train_trajectories,
                     "num_val_trajectories": len(split_indices["val"]),
                     "num_test_trajectories": len(split_indices["test"]),

@@ -6,11 +6,8 @@ import sys
 import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-GNS_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-if str(GNS_ROOT) not in sys.path:
-    sys.path.insert(0, str(GNS_ROOT))
 
 from common.initial_conditions import (
     get_condition,
@@ -34,9 +31,13 @@ from common.splits import (
 )
 from common.visualize import animate_trajectories, plot_trajectories
 
-from models.graph_network import EncodeProcessDecode
-from models.learned_simulator import LearnedSimulator
-from rollouts.gns_adapter import make_gns_step_fn, pack_gns_state, unpack_gns_state
+from SETNODE.models.graph_network import EncodeProcessDecode
+from SETNODE.models.learned_simulator import LearnedSimulator
+from SETNODE.rollouts.gns_adapter import (
+    make_gns_step_fn,
+    pack_gns_state,
+    unpack_gns_state,
+)
 
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".matplotlib-cache"))
 os.environ.setdefault("XDG_CACHE_HOME", os.path.join(os.getcwd(), ".cache"))
@@ -95,42 +96,42 @@ def load_checkpoint(
 
     Full checkpoint format should contain:
         model_state_dict
-        acc_mean
-        acc_std
+        force_std
         model_config
         dt
 
     If an older raw state_dict is found, this function uses default config
-    and recomputes acc_mean/acc_std from the dataset.
+    and recomputes force_std from the dataset.
     """
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
-    # New checkpoints record their split. Verify it before reporting a result as
-    # validation/test performance under the supplied manifest.
+    # Verify that reported validation/test results use the same partition that
+    # produced the checkpoint whenever split metadata is available.
     if split_manifest is not None:
         validate_checkpoint_split(checkpoint, split_manifest)
 
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         model_state_dict = checkpoint["model_state_dict"]
-        acc_mean = checkpoint["acc_mean"].to(device)
-        acc_std = checkpoint["acc_std"].to(device)
+        force_std = checkpoint["force_std"].to(device)
         config = checkpoint["model_config"]
         dt = checkpoint["dt"]
     else:
         print("Loaded older raw state_dict checkpoint.")
-        print(
-            "Using default model config and recomputing acc_mean/acc_std from dataset."
-        )
+        print("Using default model config and recomputing force_std from dataset.")
 
         model_state_dict = checkpoint
 
         accelerations = dataset["accelerations"].to(device)
-        # Rebuild missing legacy normalization from training data only.
+        masses = dataset["masses"].to(device)
+        # Rebuild legacy force normalization from training trajectories only.
         if train_indices is not None:
             accelerations = accelerations[train_indices]
+            masses = masses[train_indices]
+        positions = dataset["positions"].to(device)
+        _, _, _, dim = positions.shape
 
-        acc_mean = torch.zeros(1, 1, 1, 1, device=device, dtype=accelerations.dtype)
-        acc_std = accelerations.std().clamp_min(1e-8).view(1, 1, 1, 1)
+        forces = accelerations * masses.unsqueeze(1)
+        force_std = forces.std().clamp_min(1e-8).view(1, 1, 1, 1)
         processor_indices = {
             int(key.split(".")[1])
             for key in model_state_dict
@@ -140,13 +141,18 @@ def load_checkpoint(
         config = {
             "node_input_dim": model_state_dict["node_encoder.net.0.weight"].shape[1],
             "edge_input_dim": model_state_dict["edge_encoder.net.0.weight"].shape[1],
-            "output_dim": model_state_dict["node_decoder.net.4.weight"].shape[0],
+            "output_dim": dim,
             "latent_dim": model_state_dict["node_encoder.net.4.weight"].shape[0],
             "hidden_dim": model_state_dict["node_encoder.net.0.weight"].shape[0],
             "num_message_passing_steps": len(processor_indices),
+            "num_hidden_layers": 2,
+            "distance_dim": 16,
+            "ffn_dim": 256,
+            "num_heads": 4,
+            "epsilon": dataset.get("metadata", {}).get("epsilon", 0.15),
         }
 
-        dt = 0.01
+        dt = dataset.get("metadata", {}).get("dt", 0.01)
 
     if "node_mean" not in model_state_dict:
         model_state_dict["node_mean"] = torch.zeros(
@@ -165,7 +171,7 @@ def load_checkpoint(
             config["edge_input_dim"], device=device
         )
 
-    return model_state_dict, acc_mean, acc_std, config, dt
+    return model_state_dict, force_std, config, dt
 
 
 def choose_dynamic_trajectory(positions):
@@ -179,7 +185,7 @@ def choose_dynamic_trajectory(positions):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Roll out and animate the learned N-body graph simulator."
+        description="Roll out and animate the learned N-body equivariant graph simulator."
     )
     parser.add_argument(
         "--dataset-path",
@@ -188,9 +194,9 @@ def parse_args():
     parser.add_argument(
         "--checkpoint-path",
         default=str(
-            PROJECT_ROOT / "experiments" / "checkpoints" / "gns" / "rollout.pt"
+            PROJECT_ROOT / "experiments" / "checkpoints" / "setnode" / "rollout.pt"
         ),
-        help="Checkpoint to evaluate. Defaults to experiments/checkpoints/gns/rollout.pt.",
+        help="Checkpoint to evaluate. Defaults to experiments/checkpoints/setnode/rollout.pt.",
     )
     parser.add_argument(
         "--split-path",
@@ -324,8 +330,8 @@ def main():
     masses = dataset["masses"].to(device)
     metadata = dataset.get("metadata", {})
 
-    # Evaluation defaults to held-out test trajectories. --eval-split can select
-    # train or validation explicitly for diagnostics without changing the file.
+    # Dataset-based evaluation defaults to the held-out test list. Other splits
+    # can be selected explicitly for diagnostics through --eval-split.
     manifest, split_indices = load_split_manifest(
         split_path=split_path,
         dataset_path=dataset_path,
@@ -334,7 +340,7 @@ def main():
     allowed_indices = split_indices[args.eval_split]
 
     print("Using checkpoint:", checkpoint_path)
-    model_state_dict, acc_mean, acc_std, config, dt = load_checkpoint(
+    model_state_dict, force_std, config, dt = load_checkpoint(
         checkpoint_path=checkpoint_path,
         dataset=dataset,
         device=device,
@@ -345,22 +351,25 @@ def main():
     graph_network = EncodeProcessDecode(
         node_input_dim=config["node_input_dim"],
         edge_input_dim=config["edge_input_dim"],
-        output_dim=config["output_dim"],
         latent_dim=config["latent_dim"],
         hidden_dim=config["hidden_dim"],
         num_message_passing_steps=config["num_message_passing_steps"],
+        num_hidden_layers=config.get("num_hidden_layers", 2),
+        distance_dim=config.get("distance_dim", 16),
+        ffn_dim=config.get("ffn_dim", 256),
+        num_heads=config.get("num_heads", 4),
         node_mean=model_state_dict.get("node_mean"),
         node_std=model_state_dict.get("node_std"),
         edge_mean=model_state_dict.get("edge_mean"),
         edge_std=model_state_dict.get("edge_std"),
+        epsilon=config.get("epsilon", 0.15),
     ).to(device)
 
     graph_network.load_state_dict(model_state_dict)
 
     simulator = LearnedSimulator(
         graph_network=graph_network,
-        acc_mean=acc_mean,
-        acc_std=acc_std,
+        force_std=force_std,
         dt=dt,
         edge_feature_dim=config["edge_input_dim"],
     ).to(device)
@@ -407,7 +416,7 @@ def main():
             else None
         )
         evaluate_fixed_test_suite(
-            model_name="GNS",
+            model_name="SETNODE",
             rollout_fn=lambda initial_positions, initial_velocities, masses_t, steps: rollout(
                 simulator=simulator,
                 initial_positions=initial_positions,
@@ -415,9 +424,8 @@ def main():
                 masses=masses_t,
                 num_steps=steps,
             ),
-            acceleration_prediction_fn=lambda positions_t, velocities_t, masses_t: simulator.predict_acceleration(
+            acceleration_prediction_fn=lambda positions_t, _velocities_t, masses_t: simulator.predict_acceleration(
                 positions_t,
-                velocities_t,
                 masses_t,
             ),
             positions=positions,
@@ -445,7 +453,7 @@ def main():
             or custom_masses is None
         ):
             raise ValueError(
-                "Custom GNS rollouts require positions, velocities, and masses."
+                "Custom SETNODE rollouts require positions, velocities, and masses."
             )
 
         initial_positions = validate_body_tensor(
@@ -494,15 +502,15 @@ def main():
     else:
         rollout_dt = dt
         if args.traj_mode == "dynamic":
-            # Find the most dynamic trajectory within the allowed split, then map
-            # the local result back to its global dataset trajectory ID.
+            # Search only the allowed split, then convert the local winner back
+            # to its global dataset trajectory ID.
             local_idx = choose_dynamic_trajectory(positions[allowed_indices])
             traj_idx = allowed_indices[local_idx]
             print(f"Selected dynamic trajectory: {traj_idx}")
         else:
             traj_idx = allowed_indices[0] if args.traj_idx is None else args.traj_idx
 
-        # An explicitly requested global ID must belong to the selected split.
+        # Reject global IDs that do not belong to the requested evaluation split.
         if traj_idx not in set(allowed_indices):
             raise ValueError(
                 f"Trajectory {traj_idx} is not in the {args.eval_split} split."
@@ -565,7 +573,7 @@ def main():
             plot_trajectories(
                 true_positions=None,
                 predicted_positions=predicted_positions,
-                title="Predicted GNS rollout",
+                title="Predicted SETNODE rollout",
                 show=not args.no_show,
                 save_path=static_save_path,
             )
@@ -573,7 +581,7 @@ def main():
             plot_trajectories(
                 true_positions=true_positions,
                 predicted_positions=predicted_positions,
-                title="True vs learned GNS rollout",
+                title="True vs learned SETNODE rollout",
                 show=not args.no_show,
                 save_path=static_save_path,
             )

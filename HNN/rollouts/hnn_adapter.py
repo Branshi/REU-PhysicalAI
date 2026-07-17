@@ -59,14 +59,13 @@ def unpack_hnn_state(
     return positions, velocities
 
 
-def make_hnn_step_fn(
+def make_hnn_acceleration_fn(
     model,
     masses: BodyTensor,
     force_std: Tensor,
-    dt: float,
     num_bodies: int,
     dim: int,
-) -> StepFn:
+):
     if num_bodies <= 0:
         raise ValueError("num_bodies must be positive.")
 
@@ -120,6 +119,25 @@ def make_hnn_step_fn(
         predicted_force = predicted_force * expand_force_scale(positions)
 
         return predicted_force / expand_mass_columns(positions)
+
+    return predict_acceleration
+
+
+def make_hnn_step_fn(
+    model,
+    masses: BodyTensor,
+    force_std: Tensor,
+    dt: float,
+    num_bodies: int,
+    dim: int,
+) -> StepFn:
+    predict_acceleration = make_hnn_acceleration_fn(
+        model=model,
+        masses=masses,
+        force_std=force_std,
+        num_bodies=num_bodies,
+        dim=dim,
+    )
 
     def step_fn(state: StateTensor) -> StateTensor:
         positions, velocities = unpack_hnn_state(

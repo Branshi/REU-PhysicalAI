@@ -21,6 +21,11 @@ from common.initial_conditions import (
 )
 from common.nbody_data import simulate_trajectory_from_initial_conditions
 from common.rollout.differentiable import rollout_steps
+from common.rollout.test_suite import (
+    add_test_suite_arguments,
+    evaluate_fixed_test_suite,
+    should_run_test_suite,
+)
 from common.splits import (
     load_split_manifest,
     resolve_project_path,
@@ -28,7 +33,12 @@ from common.splits import (
 )
 from common.visualize import animate_trajectories, plot_trajectories
 from models.hamiltonian_network import HNN
-from rollouts.hnn_adapter import make_hnn_step_fn, pack_hnn_state, unpack_hnn_state
+from rollouts.hnn_adapter import (
+    make_hnn_acceleration_fn,
+    make_hnn_step_fn,
+    pack_hnn_state,
+    unpack_hnn_state,
+)
 
 os.environ.setdefault("MPLCONFIGDIR", os.path.join(os.getcwd(), ".matplotlib-cache"))
 os.environ.setdefault("XDG_CACHE_HOME", os.path.join(os.getcwd(), ".cache"))
@@ -198,6 +208,13 @@ def parse_args():
     )
     parser.add_argument("--interval", type=int, default=50)
     parser.add_argument("--save-path", default=None)
+    parser.add_argument(
+        "--static-save-path",
+        "--figure-save-path",
+        dest="static_save_path",
+        default=None,
+        help="Optional PNG, PDF, or SVG path for the static trajectory plot.",
+    )
     parser.add_argument("--skip-static-plot", action="store_true")
     parser.add_argument("--no-show", action="store_true")
     parser.add_argument(
@@ -211,6 +228,7 @@ def parse_args():
         default="test",
         help="Manifest split from which dataset trajectories may be evaluated.",
     )
+    add_test_suite_arguments(parser)
     parser.add_argument(
         "--traj-idx",
         type=int,
@@ -288,10 +306,16 @@ def main():
     dataset_path = resolve_project_path(args.dataset_path)
     split_path = resolve_project_path(args.split_path)
     checkpoint_path = resolve_project_path(args.checkpoint_path)
+    static_save_path = (
+        resolve_project_path(args.static_save_path)
+        if args.static_save_path is not None
+        else None
+    )
     dataset = torch.load(dataset_path, map_location=device)
 
     positions = dataset["positions"].to(device)
     velocities = dataset["velocities"].to(device)
+    accelerations = dataset["accelerations"].to(device)
     masses = dataset["masses"].to(device)
     metadata = dataset.get("metadata", {})
 
@@ -356,6 +380,48 @@ def main():
             custom_masses,
         ]
     )
+
+    if should_run_test_suite(args, use_custom_initial_conditions):
+        test_suite_output = (
+            resolve_project_path(args.test_suite_output)
+            if args.test_suite_output is not None
+            else None
+        )
+        evaluate_fixed_test_suite(
+            model_name="HNN",
+            rollout_fn=lambda initial_positions, initial_velocities, masses_t, steps: rollout(
+                model=model,
+                initial_positions=initial_positions,
+                initial_velocities=initial_velocities,
+                masses=masses_t,
+                force_std=force_std,
+                num_steps=steps,
+                dt=dt,
+            ),
+            acceleration_prediction_fn=lambda positions_t, _velocities_t, masses_t: make_hnn_acceleration_fn(
+                model=model,
+                masses=masses_t,
+                force_std=force_std,
+                num_bodies=positions_t.shape[-2],
+                dim=positions_t.shape[-1],
+            )(positions_t),
+            positions=positions,
+            velocities=velocities,
+            accelerations=accelerations,
+            masses=masses,
+            allowed_indices=allowed_indices,
+            split_name=args.eval_split,
+            num_trajectories=args.num_test_trajectories,
+            requested_rollout_steps=args.rollout_steps,
+            failure_threshold=args.failure_threshold,
+            gravitational_constant=float(metadata.get("G", 1.0)),
+            softening_epsilon=float(metadata.get("epsilon", 0.15)),
+            checkpoint_path=checkpoint_path,
+            dataset_path=dataset_path,
+            split_path=split_path,
+            output_path=test_suite_output,
+        )
+        return
 
     if use_custom_initial_conditions:
         if custom_initial_positions is None or custom_masses is None:
@@ -473,12 +539,14 @@ def main():
                 predicted_positions=pred_positions,
                 title="Predicted HNN rollout",
                 show=not args.no_show,
+                save_path=static_save_path,
             )
         else:
             plot_trajectories(
                 true_positions=true_positions,
                 predicted_positions=pred_positions,
                 show=not args.no_show,
+                save_path=static_save_path,
             )
 
     if args.no_show and args.save_path is None:

@@ -13,8 +13,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from common.experiment_runs import prepare_run_outputs, save_json
 from common.mlflow_logger import MLflowLogger
 from common.splits import load_split_manifest, resolve_project_path
-from EGNN_HNN.graph_builder import build_graph
-from EGNN_HNN.models.graph_network import EncodeProcessDecode
+from SETNODE.graph_builder import build_graph
+from SETNODE.models.graph_network import EncodeProcessDecode
 
 
 def get_device():
@@ -28,7 +28,7 @@ def get_device():
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Train the N-body EGNN-HNN with one-step force loss."
+        description="Train the N-body SETNODE with one-step force loss."
     )
     parser.add_argument(
         "--dataset-path",
@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument(
         "--checkpoint-path",
         default=str(
-            PROJECT_ROOT / "experiments" / "checkpoints" / "egnn_hnn" / "one_step.pt"
+            PROJECT_ROOT / "experiments" / "checkpoints" / "setnode" / "one_step.pt"
         ),
         help="Checkpoint path for the best one-step model.",
     )
@@ -65,6 +65,10 @@ def parse_args():
     parser.add_argument("--hidden-dim", type=int, default=128)
     parser.add_argument("--latent-dim", type=int, default=128)
     parser.add_argument("--num-messages", type=int, default=6)
+    parser.add_argument("--num-hidden-layers", type=int, default=2)
+    parser.add_argument("--distance-dim", type=int, default=16)
+    parser.add_argument("--ffn-dim", type=int, default=256)
+    parser.add_argument("--num-heads", type=int, default=4)
     parser.add_argument(
         "--seed",
         type=int,
@@ -207,7 +211,8 @@ def evaluate_validation(
         "force_loss": total_force_loss / num_samples,
         "acceleration_rmse": (
             total_acceleration_squared_error / total_acceleration_values
-        ) ** 0.5,
+        )
+        ** 0.5,
     }
 
 
@@ -219,7 +224,7 @@ def main():
 
     output_path, run_dir, metrics_path = prepare_run_outputs(
         project_root=PROJECT_ROOT,
-        run_name="egnn_hnn_onestep",
+        run_name="setnode_onestep",
         args=args,
         output_path=args.checkpoint_path,
     )
@@ -228,9 +233,9 @@ def main():
 
     mlflow_logger = MLflowLogger(
         project_root=PROJECT_ROOT,
-        experiment_name="egnn_hnn_onestep",
+        experiment_name="setnode_onestep",
         run_name=run_dir.name if run_dir is not None else output_path.stem,
-        tags={"model": "EGNN-HNN", "training_stage": "one_step", "device": device},
+        tags={"model": "SETNODE", "training_stage": "one_step", "device": device},
         enabled=not args.disable_mlflow,
     ).start()
     mlflow_logger.log_params(args)
@@ -339,6 +344,10 @@ def main():
         latent_dim=args.latent_dim,
         hidden_dim=args.hidden_dim,
         num_message_passing_steps=args.num_messages,
+        num_hidden_layers=args.num_hidden_layers,
+        distance_dim=args.distance_dim,
+        ffn_dim=args.ffn_dim,
+        num_heads=args.num_heads,
         node_mean=node_mean,
         node_std=node_std,
         edge_mean=edge_mean,
@@ -496,6 +505,10 @@ def main():
                     "latent_dim": args.latent_dim,
                     "hidden_dim": args.hidden_dim,
                     "num_message_passing_steps": args.num_messages,
+                    "num_hidden_layers": args.num_hidden_layers,
+                    "distance_dim": args.distance_dim,
+                    "ffn_dim": args.ffn_dim,
+                    "num_heads": args.num_heads,
                     "epsilon": epsilon,
                 },
                 "dt": dt,

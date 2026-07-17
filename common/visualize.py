@@ -8,8 +8,10 @@ def plot_trajectories(
     predicted_positions=None,
     title="N-body trajectories",
     show=True,
+    save_path=None,
+    dpi=300,
 ):
-    """Static 2D plot of true and predicted trajectories."""
+    """Create and optionally save a static 2D trajectory comparison."""
 
     import matplotlib.pyplot as plt
 
@@ -30,38 +32,50 @@ def plot_trajectories(
     if dim != 2:
         raise ValueError("This plotting function only supports 2D trajectories.")
 
-    plt.figure(figsize=(8, 8))
+    figure, axis = plt.subplots(figsize=(8, 8))
 
     for body_idx in range(num_bodies):
         if true_positions is not None:
             x_true = true_positions[:, body_idx, 0]
             y_true = true_positions[:, body_idx, 1]
 
-            plt.plot(x_true, y_true, label=f"Body {body_idx} true")
-            plt.scatter(x_true[0], y_true[0], marker="o")
-            plt.scatter(x_true[-1], y_true[-1], marker="x")
+            axis.plot(x_true, y_true, label=f"Body {body_idx} true")
+            axis.scatter(x_true[0], y_true[0], marker="o")
+            axis.scatter(x_true[-1], y_true[-1], marker="x")
 
         if predicted_positions is not None:
             x_pred = predicted_positions[:, body_idx, 0]
             y_pred = predicted_positions[:, body_idx, 1]
 
-            plt.plot(
+            axis.plot(
                 x_pred,
                 y_pred,
                 linestyle="--",
                 label=f"Body {body_idx} predicted",
             )
-            plt.scatter(x_pred[0], y_pred[0], marker="o")
-            plt.scatter(x_pred[-1], y_pred[-1], marker="x")
+            axis.scatter(x_pred[0], y_pred[0], marker="o")
+            axis.scatter(x_pred[-1], y_pred[-1], marker="x")
 
-    plt.title(title)
-    plt.xlabel("x position")
-    plt.ylabel("y position")
-    plt.axis("equal")
-    plt.legend()
-    plt.grid(True)
+    axis.set_title(title)
+    axis.set_xlabel("x position")
+    axis.set_ylabel("y position")
+    axis.set_aspect("equal", adjustable="datalim")
+    axis.legend()
+    axis.grid(True)
+
+    resolved_save_path = None
+    if save_path is not None:
+        resolved_save_path = Path(save_path).expanduser().resolve()
+        resolved_save_path.parent.mkdir(parents=True, exist_ok=True)
+        figure.savefig(resolved_save_path, dpi=dpi, bbox_inches="tight")
+        print(f"Saved static trajectory plot: {resolved_save_path}")
+
     if show:
         plt.show()
+    else:
+        plt.close(figure)
+
+    return resolved_save_path
 
 
 def animate_trajectories(

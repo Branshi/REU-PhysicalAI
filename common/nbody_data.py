@@ -12,7 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from common.rollout.integrators import velocity_verlet_step
 
 
-def compute_acceleration(positions, masses, G=1.0, epsilon=0.05):
+def compute_acceleration(positions, masses, G=1.0, epsilon=0.0):
     """
     Computes gravitational acceleration for each body.
 
@@ -114,10 +114,10 @@ def sample_initial_conditions(
     num_bodies=2,
     dim=2,
     position_scale=0.8,
-    velocity_scale=0.15,
+    velocity_scale=0.8,
     mass_min=0.5,
     mass_max=2.0,
-    min_distance=0.35,
+    min_distance=0.4,
     max_attempts=1000,
     device="cpu",
 ):
@@ -158,10 +158,10 @@ def simulate_trajectory(
     dt=0.01,
     dim=2,
     G=1.0,
-    epsilon=0.15,
+    epsilon=0.0,
     position_scale=0.8,
-    velocity_scale=0.15,
-    min_distance=0.35,
+    velocity_scale=0.8,
+    min_distance=0.4,
     device="cpu",
 ):
     """
@@ -228,7 +228,7 @@ def simulate_trajectory_from_initial_conditions(
     num_steps,
     dt=0.01,
     G=1.0,
-    epsilon=0.15,
+    epsilon=0.0,
 ):
     """
     Simulate a trajectory from user-provided initial conditions.
@@ -282,12 +282,12 @@ def generate_dataset(
     dt=0.01,
     dim=2,
     G=1.0,
-    epsilon=0.15,
+    epsilon=0.0,
     position_scale=0.8,
-    velocity_scale=0.15,
-    min_distance=0.35,
-    min_trajectory_distance=None,
-    max_acceleration=80.0,
+    velocity_scale=0.8,
+    min_distance=0.4,
+    min_trajectory_distance=0.3,
+    max_acceleration=100.0,
     max_resample_attempts=100,
     device="cpu",
 ):
@@ -380,30 +380,37 @@ def generate_dataset(
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Generate an N-body dataset.")
-    parser.add_argument("--dataset-name", default="nbody_dataset")
+    parser.add_argument("--dataset-name", default="nbody_3body_eps0_close")
     parser.add_argument(
         "--output-path",
-        default=str(PROJECT_ROOT / "common" / "datasets" / "nbody_dataset.pt"),
+        default=str(
+            PROJECT_ROOT / "common" / "datasets" / "nbody_3body_eps0_close.pt"
+        ),
     )
     parser.add_argument(
         "--split-output-path",
-        default=str(PROJECT_ROOT / "experiments" / "splits" / "nbody_dataset.json"),
+        default=str(
+            PROJECT_ROOT
+            / "experiments"
+            / "splits"
+            / "nbody_3body_eps0_close.json"
+        ),
     )
-    parser.add_argument("--num-trajectories", type=int, default=2000)
+    parser.add_argument("--num-trajectories", type=int, default=1000)
     parser.add_argument("--num-bodies", type=int, default=3)
     parser.add_argument("--num-steps", type=int, default=300)
     parser.add_argument("--dt", type=float, default=0.01)
     parser.add_argument("--dim", type=int, default=2)
     parser.add_argument("--G", type=float, default=1.0)
-    parser.add_argument("--epsilon", type=float, default=0.15)
+    parser.add_argument("--epsilon", type=float, default=0.0)
     parser.add_argument("--position-scale", type=float, default=0.8)
-    parser.add_argument("--velocity-scale", type=float, default=0.15)
-    parser.add_argument("--min-distance", type=float, default=0.35)
-    parser.add_argument("--min-trajectory-distance", type=float, default=None)
-    parser.add_argument("--max-acceleration", type=float, default=80.0)
+    parser.add_argument("--velocity-scale", type=float, default=0.8)
+    parser.add_argument("--min-distance", type=float, default=0.4)
+    parser.add_argument("--min-trajectory-distance", type=float, default=0.3)
+    parser.add_argument("--max-acceleration", type=float, default=100.0)
     parser.add_argument("--max-resample-attempts", type=int, default=100)
-    parser.add_argument("--seed", type=int, default=None)
-    parser.add_argument("--split-seed", type=int, default=None)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--split-seed", type=int, default=42)
     parser.add_argument("--train-fraction", type=float, default=0.7)
     parser.add_argument("--val-fraction", type=float, default=0.15)
     parser.add_argument("--test-fraction", type=float, default=0.15)

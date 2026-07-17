@@ -1,5 +1,6 @@
 import argparse
 import sys
+import time
 from pathlib import Path
 
 import torch
@@ -48,6 +49,21 @@ def parse_args():
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument(
+        "--max-hours",
+        type=float,
+        default=None,
+        help=(
+            "Optional wall-clock training limit in hours. The current partial "
+            "epoch is validated before training exits."
+        ),
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Seed for model initialization and training permutations.",
+    )
     parser.add_argument(
         "--num-validation-samples",
         type=int,
@@ -106,6 +122,7 @@ def flatten_potential_inputs(
 
 def main():
     args = parse_args()
+    torch.manual_seed(args.seed)
     device = get_device()
     print("Using device: ", device)
 
@@ -237,6 +254,9 @@ def main():
         },
     })
 
+    # Reset immediately before construction so preprocessing cannot change the
+    # initial weights selected by the configured seed.
+    torch.manual_seed(args.seed)
     model = HNN(
         input_dim=input_dim,
         hidden_dim=args.hidden_dim,
@@ -247,20 +267,39 @@ def main():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
+    # Generate permutations on CPU for consistent seeded behavior across CPU,
+    # CUDA, and MPS, then move each permutation to the selected device.
+    training_generator = torch.Generator(device="cpu").manual_seed(args.seed)
+
     best_val_loss = float("inf")
     best_validation_acceleration_rmse = float("inf")
     last_train_loss = float("nan")
     last_validation_force_loss = float("nan")
     last_validation_acceleration_rmse = float("nan")
+    epochs_completed = 0
+    start_time = time.monotonic()
+    max_seconds = None if args.max_hours is None else args.max_hours * 60 * 60
+    stop_training = False
+
+    if max_seconds is not None:
+        print(f"max training time: {args.max_hours:.2f} hours")
 
     for epoch in range(1, args.epochs + 1):
         model.train()
-        permutation = torch.randperm(train_inputs.shape[0], device=device)
+        permutation = torch.randperm(
+            train_inputs.shape[0],
+            generator=training_generator,
+            device="cpu",
+        ).to(device)
 
         total_train_loss = 0.0
         num_train_batches = 0
 
         for start in range(0, train_inputs.shape[0], args.batch_size):
+            if max_seconds is not None and time.monotonic() - start_time >= max_seconds:
+                stop_training = True
+                break
+
             end = start + args.batch_size
             batch_indices = permutation[start:end]
 
@@ -280,6 +319,9 @@ def main():
 
             total_train_loss += loss.item()
             num_train_batches += 1
+
+        if num_train_batches == 0:
+            break
 
         avg_train_loss = total_train_loss / num_train_batches
 
@@ -356,6 +398,7 @@ def main():
                     "epochs": args.epochs,
                     "batch_size": args.batch_size,
                     "lr": args.lr,
+                    "seed": args.seed,
                     "split_path": str(split_path),
                     "split_seed": manifest.get("split_config", {}).get("split_seed"),
                     "num_train_trajectories": num_train_traj,
@@ -386,13 +429,17 @@ def main():
             step=epoch,
         )
 
+        epochs_completed = epoch
+        if stop_training:
+            break
+
     metrics = {
         "best_validation_normalized_force_mse": best_val_loss,
         "final_train_normalized_force_mse": last_train_loss,
         "final_validation_normalized_force_mse": last_validation_force_loss,
         "validation_acceleration_rmse_at_best": best_validation_acceleration_rmse,
         "final_validation_acceleration_rmse": last_validation_acceleration_rmse,
-        "epochs_completed": args.epochs,
+        "epochs_completed": epochs_completed,
         "checkpoint_path": str(output_path),
     }
     if metrics_path is not None:

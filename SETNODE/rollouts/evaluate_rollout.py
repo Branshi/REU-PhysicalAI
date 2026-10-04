@@ -27,11 +27,12 @@ from common.rollout.test_suite import (
 from common.splits import (
     load_split_manifest,
     resolve_project_path,
+    resolve_split_trajectory_index,
     validate_checkpoint_split,
 )
 from common.visualize import animate_trajectories, plot_trajectories
 
-from SETNODE.models.graph_network import EncodeProcessDecode
+from SETNODE.models.model_factory import build_setnode_model
 from SETNODE.models.learned_simulator import LearnedSimulator
 from SETNODE.rollouts.gns_adapter import (
     make_gns_step_fn,
@@ -113,7 +114,10 @@ def load_checkpoint(
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         model_state_dict = checkpoint["model_state_dict"]
         force_std = checkpoint["force_std"].to(device)
-        config = checkpoint["model_config"]
+        config = dict(checkpoint["model_config"])
+        # Checkpoints created before mass feature modes used raw masses only.
+        config.setdefault("mass_feature_mode", "raw")
+        config.setdefault("model_variant", "baseline")
         dt = checkpoint["dt"]
     else:
         print("Loaded older raw state_dict checkpoint.")
@@ -139,6 +143,7 @@ def load_checkpoint(
         }
 
         config = {
+            "model_variant": "baseline",
             "node_input_dim": model_state_dict["node_encoder.net.0.weight"].shape[1],
             "edge_input_dim": model_state_dict["edge_encoder.net.0.weight"].shape[1],
             "output_dim": dim,
@@ -151,6 +156,11 @@ def load_checkpoint(
             "num_heads": 4,
             "epsilon": dataset.get("metadata", {}).get("epsilon", 0.15),
         }
+        config["mass_feature_mode"] = (
+            "raw_log"
+            if config["node_input_dim"] == 2 and config["edge_input_dim"] == 4
+            else "raw"
+        )
 
         dt = dataset.get("metadata", {}).get("dt", 0.01)
 
@@ -215,6 +225,12 @@ def parse_args():
         type=int,
         default=None,
         help="Global dataset trajectory ID. Defaults to the first ID in eval-split.",
+    )
+    parser.add_argument(
+        "--traj-number",
+        type=int,
+        default=None,
+        help="One-based trajectory number within eval-split (for example, 1-500).",
     )
     parser.add_argument(
         "--initial-conditions",
@@ -293,6 +309,14 @@ def parse_args():
         help="Optional PNG, PDF, or SVG path for the static trajectory plot.",
     )
     parser.add_argument(
+        "--static-title",
+        default=None,
+        help=(
+            "Optional static-plot title override. Pass an empty string to "
+            "remove the title."
+        ),
+    )
+    parser.add_argument(
         "--style",
         choices=["dark", "clean"],
         default="dark",
@@ -303,6 +327,38 @@ def parse_args():
         type=int,
         default=None,
         help="Number of recent frames to show in trails. Defaults to full trails.",
+    )
+    parser.add_argument(
+        "--loop-animation",
+        action="store_true",
+        help="Loop an interactive 3D animation until its window is closed.",
+    )
+    parser.add_argument(
+        "--predicted-only",
+        action="store_true",
+        help="Hide reference trajectories and visualize only model predictions.",
+    )
+    parser.add_argument(
+        "--bloom",
+        action="store_true",
+        help="Apply post-processed bloom when saving a 3D animation.",
+    )
+    parser.add_argument(
+        "--bloom-largest-only",
+        action="store_true",
+        help=(
+            "With --bloom, restrict the glow to the maximum-mass body. "
+            "Other bodies and trails remain visible without bloom."
+        ),
+    )
+    parser.add_argument(
+        "--body-size-scale",
+        type=float,
+        default=1.5,
+        help=(
+            "Multiplier for all 3D body radii. Mass-based relative sizes are "
+            "preserved. Use 1.0 for the previous size (default: 1.5)."
+        ),
     )
     parser.add_argument("--skip-static-plot", action="store_true")
     parser.add_argument("--no-show", action="store_true")
@@ -348,7 +404,8 @@ def main():
         split_manifest=manifest,
     )
 
-    graph_network = EncodeProcessDecode(
+    graph_network = build_setnode_model(
+        model_variant=config.get("model_variant", "baseline"),
         node_input_dim=config["node_input_dim"],
         edge_input_dim=config["edge_input_dim"],
         latent_dim=config["latent_dim"],
@@ -363,6 +420,8 @@ def main():
         edge_mean=model_state_dict.get("edge_mean"),
         edge_std=model_state_dict.get("edge_std"),
         epsilon=config.get("epsilon", 0.15),
+        rbf_initial_scale=config.get("rbf_initial_scale", 1.0),
+        global_gate_init=config.get("global_potential_gate_init", 1e-2),
     ).to(device)
 
     graph_network.load_state_dict(model_state_dict)
@@ -372,6 +431,7 @@ def main():
         force_std=force_std,
         dt=dt,
         edge_feature_dim=config["edge_input_dim"],
+        mass_feature_mode=config.get("mass_feature_mode", "raw"),
     ).to(device)
 
     conditions = load_initial_conditions(args.initial_conditions)
@@ -508,13 +568,17 @@ def main():
             traj_idx = allowed_indices[local_idx]
             print(f"Selected dynamic trajectory: {traj_idx}")
         else:
-            traj_idx = allowed_indices[0] if args.traj_idx is None else args.traj_idx
-
-        # Reject global IDs that do not belong to the requested evaluation split.
-        if traj_idx not in set(allowed_indices):
-            raise ValueError(
-                f"Trajectory {traj_idx} is not in the {args.eval_split} split."
+            traj_idx = resolve_split_trajectory_index(
+                allowed_indices,
+                args.eval_split,
+                trajectory_index=args.traj_idx,
+                trajectory_number=args.traj_number,
             )
+            if args.traj_number is not None:
+                print(
+                    f"Selected {args.eval_split} trajectory number "
+                    f"{args.traj_number}: global ID {traj_idx}"
+                )
         print(f"Evaluating {args.eval_split} trajectory: {traj_idx}")
 
         max_rollout_steps = positions.shape[1] - 1
@@ -568,20 +632,32 @@ def main():
         f"{predicted_positions.shape[0] * args.interval / 1000:.2f} seconds",
     )
 
+    display_true_positions = None if args.predicted_only else true_positions
+
     if not args.skip_static_plot:
-        if true_positions is None:
+        if display_true_positions is None:
+            static_title = (
+                args.static_title
+                if args.static_title is not None
+                else "Predicted SETNODE rollout"
+            )
             plot_trajectories(
                 true_positions=None,
                 predicted_positions=predicted_positions,
-                title="Predicted SETNODE rollout",
+                title=static_title,
                 show=not args.no_show,
                 save_path=static_save_path,
             )
         else:
+            static_title = (
+                args.static_title
+                if args.static_title is not None
+                else "True vs learned SETNODE rollout"
+            )
             plot_trajectories(
-                true_positions=true_positions,
+                true_positions=display_true_positions,
                 predicted_positions=predicted_positions,
-                title="True vs learned SETNODE rollout",
+                title=static_title,
                 show=not args.no_show,
                 save_path=static_save_path,
             )
@@ -590,7 +666,7 @@ def main():
         print("Skipping animation display because --no-show was provided.")
     else:
         animate_trajectories(
-            true_positions=true_positions,
+            true_positions=display_true_positions,
             predicted_positions=predicted_positions,
             masses=masses_t,
             dt=rollout_dt,
@@ -600,6 +676,10 @@ def main():
             show=not args.no_show,
             style=args.style,
             trail_length=args.trail_length,
+            loop=args.loop_animation,
+            bloom=args.bloom,
+            bloom_largest_only=args.bloom_largest_only,
+            body_size_scale=args.body_size_scale,
         )
 
 

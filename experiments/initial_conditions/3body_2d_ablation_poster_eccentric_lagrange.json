@@ -1,0 +1,18 @@
+{
+  "description": "Compact eccentric equal-mass Lagrange trajectory used in the SETNODE poster. G=1, epsilon=0, reference period approximately 3.68413362.",
+  "positions": [
+    [0.35, 0.0],
+    [-0.175, 0.3031088913],
+    [-0.175, -0.3031088913]
+  ],
+  "velocities": [
+    [0.0, 1.5196713713],
+    [-1.316074013, -0.7598356857],
+    [1.316074013, -0.7598356857]
+  ],
+  "masses": [
+    1.0,
+    1.0,
+    1.0
+  ]
+}

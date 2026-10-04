@@ -25,7 +25,7 @@ from common.splits import (
     resolve_project_path,
     validate_checkpoint_split,
 )
-from SETNODE.models.graph_network import EncodeProcessDecode
+from SETNODE.models.model_factory import build_setnode_model
 from SETNODE.models.learned_simulator import LearnedSimulator
 from SETNODE.rollouts.gns_adapter import (
     make_gns_step_fn,
@@ -132,7 +132,10 @@ def load_checkpoint(
     if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
         model_state_dict = checkpoint["model_state_dict"]
         force_std = checkpoint["force_std"].to(device)
-        config = checkpoint["model_config"]
+        config = dict(checkpoint["model_config"])
+        # Checkpoints created before mass feature modes used raw masses only.
+        config.setdefault("mass_feature_mode", "raw")
+        config.setdefault("model_variant", "baseline")
         dt = checkpoint.get("dt", dataset.get("metadata", {}).get("dt", 0.01))
     elif isinstance(checkpoint, dict):
         print("Loaded older raw state_dict checkpoint.")
@@ -158,6 +161,7 @@ def load_checkpoint(
         }
 
         config = {
+            "model_variant": "baseline",
             "node_input_dim": model_state_dict["node_encoder.net.0.weight"].shape[1],
             "edge_input_dim": model_state_dict["edge_encoder.net.0.weight"].shape[1],
             "output_dim": dim,
@@ -170,6 +174,11 @@ def load_checkpoint(
             "num_heads": 4,
             "epsilon": dataset.get("metadata", {}).get("epsilon", 0.15),
         }
+        config["mass_feature_mode"] = (
+            "raw_log"
+            if config["node_input_dim"] == 2 and config["edge_input_dim"] == 4
+            else "raw"
+        )
         dt = dataset.get("metadata", {}).get("dt", 0.01)
     else:
         raise ValueError(
@@ -198,7 +207,8 @@ def load_checkpoint(
 
 
 def build_simulator(model_state_dict, force_std, config, dt, device):
-    graph_network = EncodeProcessDecode(
+    graph_network = build_setnode_model(
+        model_variant=config.get("model_variant", "baseline"),
         node_input_dim=config["node_input_dim"],
         edge_input_dim=config["edge_input_dim"],
         latent_dim=config["latent_dim"],
@@ -213,6 +223,8 @@ def build_simulator(model_state_dict, force_std, config, dt, device):
         edge_mean=model_state_dict.get("edge_mean"),
         edge_std=model_state_dict.get("edge_std"),
         epsilon=config.get("epsilon", 0.15),
+        rbf_initial_scale=config.get("rbf_initial_scale", 1.0),
+        global_gate_init=config.get("global_potential_gate_init", 1e-2),
     ).to(device)
     graph_network.load_state_dict(model_state_dict)
 
@@ -221,6 +233,7 @@ def build_simulator(model_state_dict, force_std, config, dt, device):
         force_std=force_std,
         dt=dt,
         edge_feature_dim=config["edge_input_dim"],
+        mass_feature_mode=config.get("mass_feature_mode", "raw"),
     ).to(device)
 
     return graph_network, simulator

@@ -279,14 +279,6 @@ def main():
     print("training acc mean:", train_accelerations.mean().item())
     print("training acc std:", train_accelerations.std().item())
     print("training acc max abs:", train_accelerations.abs().max().item())
-    print(
-        "acc 95th percentile:",
-        torch.quantile(train_accelerations.abs().flatten(), 0.95).item(),
-    )
-    print(
-        "acc 99th percentile:",
-        torch.quantile(train_accelerations.abs().flatten(), 0.99).item(),
-    )
 
     # Validation averaging requires at least one fixed sample.
     if args.num_validation_samples <= 0:

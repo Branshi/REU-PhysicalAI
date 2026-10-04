@@ -1,0 +1,18 @@
+{
+  "description": "Compact equal-mass figure-eight choreography for the 3-body 2D ablation model. G=1, epsilon=0, reference period approximately 3.23886796.",
+  "positions": [
+    [0.6208027904, -0.1555760192],
+    [-0.6208027904, 0.1555760192],
+    [0.0, 0.0]
+  ],
+  "velocities": [
+    [0.5827546063, 0.5404571625],
+    [0.5827546063, 0.5404571625],
+    [-1.1655092125, -1.080914325]
+  ],
+  "masses": [
+    1.0,
+    1.0,
+    1.0
+  ]
+}

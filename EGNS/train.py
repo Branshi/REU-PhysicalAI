@@ -281,14 +281,6 @@ def main():
     print("acc mean:", train_accelerations.mean().item())
     print("acc std:", train_accelerations.std().item())
     print("acc max abs:", train_accelerations.abs().max().item())
-    print(
-        "acc 95th percentile:",
-        torch.quantile(train_accelerations.abs().flatten(), 0.95).item(),
-    )
-    print(
-        "acc 99th percentile:",
-        torch.quantile(train_accelerations.abs().flatten(), 0.99).item(),
-    )
 
     # EGNS keeps a zero mean and one rotationally invariant scalar scale. The
     # scalar is computed only from training accelerations to avoid leakage.

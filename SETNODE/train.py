@@ -13,8 +13,8 @@ if str(PROJECT_ROOT) not in sys.path:
 from common.experiment_runs import prepare_run_outputs, save_json
 from common.mlflow_logger import MLflowLogger
 from common.splits import load_split_manifest, resolve_project_path
-from SETNODE.graph_builder import build_graph
-from SETNODE.models.graph_network import EncodeProcessDecode
+from SETNODE.graph_builder import MASS_FEATURE_MODES, build_graph
+from SETNODE.models.model_factory import MODEL_VARIANTS, build_setnode_model
 
 
 def get_device():
@@ -70,6 +70,48 @@ def parse_args():
     parser.add_argument("--ffn-dim", type=int, default=256)
     parser.add_argument("--num-heads", type=int, default=4)
     parser.add_argument(
+        "--model-variant",
+        choices=MODEL_VARIANTS,
+        default="baseline",
+        help=(
+            "SETNODE architecture to train. generic_ablation enables the "
+            "separate law-agnostic potential ablation model."
+        ),
+    )
+    parser.add_argument(
+        "--rbf-initial-scale",
+        type=float,
+        default=1.0,
+        help="Initial learned distance scale for generic_ablation radial bases.",
+    )
+    parser.add_argument(
+        "--global-potential-gate-init",
+        type=float,
+        default=1e-2,
+        help="Initial global-potential LayerScale value for generic_ablation.",
+    )
+    parser.add_argument(
+        "--mass-feature-mode",
+        choices=MASS_FEATURE_MODES,
+        default="raw_log",
+        help=(
+            "Mass representation used by node and edge encoders. raw_log keeps "
+            "small orbiting masses distinguishable from a dominant central mass."
+        ),
+    )
+    parser.add_argument(
+        "--acceleration-loss-weight",
+        type=float,
+        default=1.0,
+        help="Weight for normalized acceleration MSE in the one-step objective.",
+    )
+    parser.add_argument(
+        "--force-loss-weight",
+        type=float,
+        default=0.05,
+        help="Weight for normalized force MSE in the one-step objective.",
+    )
+    parser.add_argument(
         "--seed",
         type=int,
         default=42,
@@ -98,6 +140,7 @@ def compute_graph_feature_stats(
     positions,
     masses,
     num_train_trajectories,
+    mass_feature_mode,
 ):
     node_feature_list = []
     edge_feature_list = []
@@ -108,6 +151,7 @@ def compute_graph_feature_stats(
         graph = build_graph(
             positions=positions[traj_idx, 0],
             masses=masses[traj_idx],
+            mass_feature_mode=mass_feature_mode,
         )
         node_feature_list.append(graph["node_features"])
         edge_feature_list.append(graph["edge_features"])
@@ -129,6 +173,10 @@ def evaluate_validation(
     accelerations,
     masses,
     force_std,
+    acceleration_std,
+    mass_feature_mode,
+    acceleration_loss_weight,
+    force_loss_weight,
     validation_indices,
 ):
     # Remember the incoming mode so this helper does not unexpectedly change it.
@@ -139,6 +187,12 @@ def evaluate_validation(
 
     # Accumulate normalized force MSE across the fixed validation samples.
     total_force_loss = 0.0
+
+    # This is the mass-balanced metric used to select orbital checkpoints.
+    total_normalized_acceleration_loss = 0.0
+
+    # Track the exact hybrid objective used for parameter updates.
+    total_objective = 0.0
 
     # Accumulate physical squared error for the cross-family acceleration RMSE.
     total_acceleration_squared_error = 0.0
@@ -168,6 +222,7 @@ def evaluate_validation(
             graph = build_graph(
                 positions=positions_t,
                 masses=masses_t,
+                mass_feature_mode=mass_feature_mode,
             )
 
             # Predict normalized force without constructing a higher-order graph.
@@ -192,9 +247,19 @@ def evaluate_validation(
             acceleration_squared_error = (
                 predicted_acceleration - target_acceleration
             ).square()
+            normalized_acceleration_loss = F.mse_loss(
+                predicted_acceleration / acceleration_std,
+                target_acceleration / acceleration_std,
+            )
+            objective = (
+                acceleration_loss_weight * normalized_acceleration_loss
+                + force_loss_weight * force_loss
+            )
 
             # Add this state's scalar normalized force loss to the running sum.
             total_force_loss += force_loss.item()
+            total_normalized_acceleration_loss += normalized_acceleration_loss.item()
+            total_objective += objective.item()
 
             total_acceleration_squared_error += acceleration_squared_error.sum().item()
             total_acceleration_values += acceleration_squared_error.numel()
@@ -208,7 +273,11 @@ def evaluate_validation(
 
     # Return both metrics as ordinary Python floats.
     return {
+        "objective": total_objective / num_samples,
         "force_loss": total_force_loss / num_samples,
+        "normalized_acceleration_mse": (
+            total_normalized_acceleration_loss / num_samples
+        ),
         "acceleration_rmse": (
             total_acceleration_squared_error / total_acceleration_values
         )
@@ -218,6 +287,17 @@ def evaluate_validation(
 
 def main():
     args = parse_args()
+    if args.rbf_initial_scale <= 0.0:
+        raise ValueError("rbf-initial-scale must be positive.")
+    if args.global_potential_gate_init < 0.0:
+        raise ValueError("global-potential-gate-init must be nonnegative.")
+    if args.acceleration_loss_weight < 0.0:
+        raise ValueError("acceleration-loss-weight must be nonnegative.")
+    if args.force_loss_weight < 0.0:
+        raise ValueError("force-loss-weight must be nonnegative.")
+    if args.acceleration_loss_weight == 0.0 and args.force_loss_weight == 0.0:
+        raise ValueError("At least one one-step loss weight must be positive.")
+
     torch.manual_seed(args.seed)
     device = get_device()
     print("Using device:", device)
@@ -277,6 +357,7 @@ def main():
     sample_graph = build_graph(
         positions=train_positions[0, 0],
         masses=train_masses[0],
+        mass_feature_mode=args.mass_feature_mode,
     )
     node_input_dim = sample_graph["node_features"].shape[-1]
     edge_input_dim = sample_graph["edge_features"].shape[-1]
@@ -284,14 +365,6 @@ def main():
     print("training acc mean:", train_accelerations.mean().item())
     print("training acc std:", train_accelerations.std().item())
     print("training acc max abs:", train_accelerations.abs().max().item())
-    print(
-        "acc 95th percentile:",
-        torch.quantile(train_accelerations.abs().flatten(), 0.95).item(),
-    )
-    print(
-        "acc 99th percentile:",
-        torch.quantile(train_accelerations.abs().flatten(), 0.99).item(),
-    )
 
     # Validation averaging requires at least one fixed sample.
     if args.num_validation_samples <= 0:
@@ -303,6 +376,10 @@ def main():
 
     # Use one global scalar so force normalization preserves rotational symmetry.
     force_std = training_forces.std().clamp_min(1e-8).reshape(1)
+
+    # A scalar acceleration scale likewise preserves rotational symmetry while
+    # keeping the planet-focused loss dimensionless.
+    acceleration_std = train_accelerations.std().clamp_min(1e-8).reshape(1)
 
     mlflow_logger.log_params({
         "data": {
@@ -325,6 +402,11 @@ def main():
             "node_input_dim": node_input_dim,
             "edge_input_dim": edge_input_dim,
             "output_dim": dim,
+            "mass_feature_mode": args.mass_feature_mode,
+        },
+        "objective": {
+            "acceleration_loss_weight": args.acceleration_loss_weight,
+            "force_loss_weight": args.force_loss_weight,
         },
     })
 
@@ -334,11 +416,13 @@ def main():
         positions=train_positions,
         masses=train_masses,
         num_train_trajectories=num_train_trajectories,
+        mass_feature_mode=args.mass_feature_mode,
     )
 
     # Isolate initialization from any future random preprocessing added above.
     torch.manual_seed(args.seed)
-    model = EncodeProcessDecode(
+    model = build_setnode_model(
+        model_variant=args.model_variant,
         node_input_dim=node_input_dim,
         edge_input_dim=edge_input_dim,
         latent_dim=args.latent_dim,
@@ -353,6 +437,8 @@ def main():
         edge_mean=edge_mean,
         edge_std=edge_std,
         epsilon=epsilon,
+        rbf_initial_scale=args.rbf_initial_scale,
+        global_gate_init=args.global_potential_gate_init,
     ).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
@@ -362,7 +448,7 @@ def main():
     # and independent of the architecture's parameter count.
     training_generator = torch.Generator(device="cpu").manual_seed(args.seed)
 
-    best_validation_loss = float("inf")
+    best_validation_acceleration_loss = float("inf")
     start_time = time.monotonic()
     max_seconds = None if args.max_hours is None else args.max_hours * 60 * 60
     stop_training = False
@@ -408,12 +494,18 @@ def main():
     epochs_completed = 0
 
     # Initialize final metrics for the run summary.
-    last_train_loss = float("nan")
+    last_train_objective = float("nan")
+    last_train_acceleration_loss = float("nan")
+    last_train_force_loss = float("nan")
+    last_validation_objective = float("nan")
+    last_validation_acceleration_loss = float("nan")
     last_validation_force_loss = float("nan")
     last_validation_acceleration_rmse = float("nan")
 
     for epoch in range(args.num_epochs):
-        total_loss = 0.0
+        total_objective = 0.0
+        total_acceleration_loss = 0.0
+        total_force_loss = 0.0
         steps_completed = 0
 
         for _ in range(args.steps_per_epoch):
@@ -422,7 +514,9 @@ def main():
                 break
 
             optimizer.zero_grad()
-            batch_loss = torch.zeros((), device=device)
+            batch_objective = torch.zeros((), device=device)
+            batch_acceleration_loss = torch.zeros((), device=device)
+            batch_force_loss = torch.zeros((), device=device)
 
             for _ in range(args.batch_size):
                 traj_idx = torch.randint(
@@ -440,33 +534,56 @@ def main():
 
                 positions_t = train_positions[traj_idx, time_idx]
                 masses_t = train_masses[traj_idx]
-                target_force = train_accelerations[traj_idx, time_idx] * masses_t
+                target_acceleration = train_accelerations[traj_idx, time_idx]
+                target_force = target_acceleration * masses_t
 
                 target_force_normalized = target_force / force_std.squeeze()
 
                 graph = build_graph(
                     positions=positions_t,
                     masses=masses_t,
+                    mass_feature_mode=args.mass_feature_mode,
                 )
-                predicted_force = model(graph)
-                loss = F.mse_loss(
-                    predicted_force,
+                predicted_force_normalized = model(graph)
+                force_loss = F.mse_loss(
+                    predicted_force_normalized,
                     target_force_normalized,
                 )
-                batch_loss = batch_loss + loss
+                predicted_force = predicted_force_normalized * force_std
+                predicted_acceleration = predicted_force / masses_t
+                acceleration_loss = F.mse_loss(
+                    predicted_acceleration / acceleration_std,
+                    target_acceleration / acceleration_std,
+                )
+                objective = (
+                    args.acceleration_loss_weight * acceleration_loss
+                    + args.force_loss_weight * force_loss
+                )
 
-            batch_loss = batch_loss / args.batch_size
-            batch_loss.backward()
+                batch_objective = batch_objective + objective
+                batch_acceleration_loss = (
+                    batch_acceleration_loss + acceleration_loss.detach()
+                )
+                batch_force_loss = batch_force_loss + force_loss.detach()
+
+            batch_objective = batch_objective / args.batch_size
+            batch_acceleration_loss = batch_acceleration_loss / args.batch_size
+            batch_force_loss = batch_force_loss / args.batch_size
+            batch_objective.backward()
             optimizer.step()
 
-            total_loss += batch_loss.item()
+            total_objective += batch_objective.item()
+            total_acceleration_loss += batch_acceleration_loss.item()
+            total_force_loss += batch_force_loss.item()
             steps_completed += 1
 
         if steps_completed == 0:
             break
 
         # Average the randomized training batches completed during this epoch.
-        avg_loss = total_loss / steps_completed
+        avg_objective = total_objective / steps_completed
+        avg_acceleration_loss = total_acceleration_loss / steps_completed
+        avg_force_loss = total_force_loss / steps_completed
 
         # Evaluate the same held-out states after every epoch.
         validation_metrics = evaluate_validation(
@@ -475,30 +592,47 @@ def main():
             accelerations=validation_accelerations,
             masses=validation_masses,
             force_std=force_std,
+            acceleration_std=acceleration_std,
+            mass_feature_mode=args.mass_feature_mode,
+            acceleration_loss_weight=args.acceleration_loss_weight,
+            force_loss_weight=args.force_loss_weight,
             validation_indices=validation_indices,
         )
 
-        # Extract normalized validation force MSE for model selection.
+        validation_objective = validation_metrics["objective"]
+
+        # Retain force MSE as a diagnostic for the conservative-force component.
         validation_force_loss = validation_metrics["force_loss"]
+
+        validation_acceleration_loss = validation_metrics[
+            "normalized_acceleration_mse"
+        ]
 
         # Extract physical acceleration RMSE for cross-family comparison.
         validation_acceleration_rmse = validation_metrics["acceleration_rmse"]
 
         # Record the latest completed epoch and its metrics for the run summary.
         epochs_completed = epoch + 1
-        last_train_loss = avg_loss
+        last_train_objective = avg_objective
+        last_train_acceleration_loss = avg_acceleration_loss
+        last_train_force_loss = avg_force_loss
+        last_validation_objective = validation_objective
+        last_validation_acceleration_loss = validation_acceleration_loss
         last_validation_force_loss = validation_force_loss
         last_validation_acceleration_rmse = validation_acceleration_rmse
 
-        # Save only when the fixed validation force loss reaches a new minimum.
-        if validation_force_loss < best_validation_loss:
-            best_validation_loss = validation_force_loss
+        # Orbital quality depends on acceleration after dividing by each body's
+        # mass, so select checkpoints on normalized validation acceleration MSE.
+        if validation_acceleration_loss < best_validation_acceleration_loss:
+            best_validation_acceleration_loss = validation_acceleration_loss
 
             # Package model parameters, normalization, architecture, and metrics.
             checkpoint = {
                 "model_state_dict": model.state_dict(),
                 "force_std": force_std,
+                "acceleration_std": acceleration_std,
                 "model_config": {
+                    "model_variant": args.model_variant,
                     "node_input_dim": node_input_dim,
                     "edge_input_dim": edge_input_dim,
                     "output_dim": dim,
@@ -510,6 +644,11 @@ def main():
                     "ffn_dim": args.ffn_dim,
                     "num_heads": args.num_heads,
                     "epsilon": epsilon,
+                    "mass_feature_mode": args.mass_feature_mode,
+                    "rbf_initial_scale": args.rbf_initial_scale,
+                    "global_potential_gate_init": (
+                        args.global_potential_gate_init
+                    ),
                 },
                 "dt": dt,
                 "training_config": {
@@ -517,6 +656,8 @@ def main():
                     "batch_size": args.batch_size,
                     "num_epochs": args.num_epochs,
                     "learning_rate": args.learning_rate,
+                    "acceleration_loss_weight": args.acceleration_loss_weight,
+                    "force_loss_weight": args.force_loss_weight,
                     "seed": args.seed,
                     "num_train_trajectories": num_train_trajectories,
                     "num_validation_trajectories": num_validation_trajectories,
@@ -532,8 +673,14 @@ def main():
                 # validation checkpoint for reproducible downstream rollouts.
                 "split_manifest": manifest,
                 "dataset_metadata": dataset.get("metadata", {}),
-                "train_loss_at_best": avg_loss,
-                "best_validation_normalized_force_mse": best_validation_loss,
+                "train_hybrid_objective_at_best": avg_objective,
+                "train_normalized_acceleration_mse_at_best": avg_acceleration_loss,
+                "train_normalized_force_mse_at_best": avg_force_loss,
+                "best_validation_normalized_acceleration_mse": (
+                    best_validation_acceleration_loss
+                ),
+                "validation_hybrid_objective_at_best": validation_objective,
+                "validation_normalized_force_mse_at_best": validation_force_loss,
                 "validation_acceleration_rmse_at_best": validation_acceleration_rmse,
             }
 
@@ -552,10 +699,18 @@ def main():
         # Log directly comparable training and fixed-validation metrics.
         mlflow_logger.log_metrics(
             {
-                "train_normalized_force_mse": avg_loss,
+                "train_hybrid_objective": avg_objective,
+                "train_normalized_acceleration_mse": avg_acceleration_loss,
+                "train_normalized_force_mse": avg_force_loss,
+                "validation_hybrid_objective": validation_objective,
+                "validation_normalized_acceleration_mse": (
+                    validation_acceleration_loss
+                ),
                 "validation_normalized_force_mse": validation_force_loss,
                 "validation_acceleration_rmse": validation_acceleration_rmse,
-                "best_validation_normalized_force_mse": best_validation_loss,
+                "best_validation_normalized_acceleration_mse": (
+                    best_validation_acceleration_loss
+                ),
                 "steps_completed": steps_completed,
                 "elapsed_hours": elapsed_hours,
             },
@@ -564,7 +719,11 @@ def main():
         print(
             f"Epoch {epoch + 1}/{args.num_epochs}, "
             f"steps = {steps_completed}, "
-            f"train normalized force MSE = {avg_loss:.6f}, "
+            f"train hybrid objective = {avg_objective:.6f}, "
+            f"train normalized acceleration MSE = {avg_acceleration_loss:.6f}, "
+            f"train normalized force MSE = {avg_force_loss:.6f}, "
+            f"validation normalized acceleration MSE = "
+            f"{validation_acceleration_loss:.6f}, "
             f"validation normalized force MSE = {validation_force_loss:.6f}, "
             f"validation acceleration RMSE = {validation_acceleration_rmse:.6f}, "
             f"elapsed = {elapsed_hours:.2f}h"
@@ -576,8 +735,16 @@ def main():
 
     # Summarize the completed run for JSON and MLflow output.
     metrics = {
-        "best_validation_normalized_force_mse": best_validation_loss,
-        "final_train_normalized_force_mse": last_train_loss,
+        "best_validation_normalized_acceleration_mse": (
+            best_validation_acceleration_loss
+        ),
+        "final_train_hybrid_objective": last_train_objective,
+        "final_train_normalized_acceleration_mse": last_train_acceleration_loss,
+        "final_train_normalized_force_mse": last_train_force_loss,
+        "final_validation_hybrid_objective": last_validation_objective,
+        "final_validation_normalized_acceleration_mse": (
+            last_validation_acceleration_loss
+        ),
         "final_validation_normalized_force_mse": last_validation_force_loss,
         "final_validation_acceleration_rmse": last_validation_acceleration_rmse,
         "epochs_completed": epochs_completed,

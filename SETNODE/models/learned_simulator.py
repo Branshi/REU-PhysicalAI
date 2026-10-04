@@ -17,12 +17,20 @@ class LearnedSimulator(nn.Module):
     and one-step physics integration.
     """
 
-    def __init__(self, graph_network, force_std, dt, edge_feature_dim=None):
+    def __init__(
+        self,
+        graph_network,
+        force_std,
+        dt,
+        edge_feature_dim=None,
+        mass_feature_mode="raw",
+    ):
         super().__init__()
 
         self.graph_network = graph_network
         self.dt = dt
         self.edge_feature_dim = edge_feature_dim
+        self.mass_feature_mode = mass_feature_mode
 
         # Register as buffers so they move with model.to(device)
         # force_std has shape [1,1,1,1] we change it to [1] for it to broadcast from [num_nodes, spatial_dim] properly
@@ -33,6 +41,7 @@ class LearnedSimulator(nn.Module):
         graph = build_graph(
             positions=positions,
             masses=masses,
+            mass_feature_mode=self.mass_feature_mode,
         )
         if self.edge_feature_dim is not None:
             actual_edge_feature_dim = graph["edge_features"].shape[-1]

@@ -1,0 +1,18 @@
+{
+  "description": "Equal-mass rotating equilateral Lagrange orbit for the 3-body 2D ablation model. G=1, epsilon=0, reference period approximately 2.92358139.",
+  "positions": [
+    [0.5, 0.0],
+    [-0.25, 0.4330127019],
+    [-0.25, -0.4330127019]
+  ],
+  "velocities": [
+    [0.0, 1.0745699318],
+    [-0.9306048591, -0.5372849659],
+    [0.9306048591, -0.5372849659]
+  ],
+  "masses": [
+    1.0,
+    1.0,
+    1.0
+  ]
+}

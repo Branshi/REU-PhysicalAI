@@ -29,6 +29,7 @@ from common.rollout.test_suite import (
 from common.splits import (
     load_split_manifest,
     resolve_project_path,
+    resolve_split_trajectory_index,
     validate_checkpoint_split,
 )
 from common.visualize import animate_trajectories, plot_trajectories
@@ -236,6 +237,12 @@ def parse_args():
         help="Global dataset trajectory ID. Defaults to the first ID in eval-split.",
     )
     parser.add_argument(
+        "--traj-number",
+        type=int,
+        default=None,
+        help="One-based trajectory number within eval-split (for example, 1-500).",
+    )
+    parser.add_argument(
         "--rollout-steps",
         type=int,
         default=None,
@@ -293,6 +300,21 @@ def parse_args():
     parser.add_argument("--fps", type=int, default=None)
     parser.add_argument("--style", choices=["dark", "clean"], default="dark")
     parser.add_argument("--trail-length", type=int, default=None)
+    parser.add_argument(
+        "--loop-animation",
+        action="store_true",
+        help="Loop an interactive 3D animation until its window is closed.",
+    )
+    parser.add_argument(
+        "--predicted-only",
+        action="store_true",
+        help="Hide reference trajectories and visualize only model predictions.",
+    )
+    parser.add_argument(
+        "--bloom",
+        action="store_true",
+        help="Apply post-processed bloom when saving a 3D animation.",
+    )
 
     return parser.parse_args()
 
@@ -490,10 +512,16 @@ def main():
         print(f"true epsilon: {true_epsilon}")
     else:
         rollout_dt = dt
-        traj_idx = allowed_indices[0] if args.traj_idx is None else args.traj_idx
-        if traj_idx not in set(allowed_indices):
-            raise ValueError(
-                f"Trajectory {traj_idx} is not in the {args.eval_split} split."
+        traj_idx = resolve_split_trajectory_index(
+            allowed_indices,
+            args.eval_split,
+            trajectory_index=args.traj_idx,
+            trajectory_number=args.traj_number,
+        )
+        if args.traj_number is not None:
+            print(
+                f"Selected {args.eval_split} trajectory number "
+                f"{args.traj_number}: global ID {traj_idx}"
             )
         print(f"Evaluating {args.eval_split} trajectory: {traj_idx}")
 
@@ -532,8 +560,10 @@ def main():
         print("true_positions shape:", true_positions.shape)
         print("rollout position RMSE:", rollout_position_rmse.item())
 
+    display_true_positions = None if args.predicted_only else true_positions
+
     if not args.skip_static_plot:
-        if true_positions is None:
+        if display_true_positions is None:
             plot_trajectories(
                 true_positions=None,
                 predicted_positions=pred_positions,
@@ -543,7 +573,7 @@ def main():
             )
         else:
             plot_trajectories(
-                true_positions=true_positions,
+                true_positions=display_true_positions,
                 predicted_positions=pred_positions,
                 show=not args.no_show,
                 save_path=static_save_path,
@@ -553,7 +583,7 @@ def main():
         print("Skipping animation display because --no-show was provided.")
     else:
         animate_trajectories(
-            true_positions=true_positions,
+            true_positions=display_true_positions,
             predicted_positions=pred_positions,
             masses=masses_t,
             dt=rollout_dt,
@@ -563,6 +593,8 @@ def main():
             show=not args.no_show,
             style=args.style,
             trail_length=args.trail_length,
+            loop=args.loop_animation,
+            bloom=args.bloom,
         )
 
 

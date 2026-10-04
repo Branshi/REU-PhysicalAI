@@ -77,7 +77,7 @@ def should_run_test_suite(args, use_custom_initial_conditions: bool) -> bool:
 
     if use_custom_initial_conditions or not args.test_suite:
         return False
-    if args.traj_idx is not None:
+    if args.traj_idx is not None or getattr(args, "traj_number", None) is not None:
         return False
     return getattr(args, "traj_mode", "indexed") == "indexed"
 

@@ -1,0 +1,5 @@
+# Optional dependencies for PyVista-based 3D trajectory animations.
+pyvista>=0.48,<0.49
+imageio>=2.37
+imageio-ffmpeg>=0.6
+pillow>=11

@@ -91,6 +91,36 @@ def load_split_manifest(split_path, dataset_path, dataset_shape):
     return manifest, split_indices
 
 
+def resolve_split_trajectory_index(
+    allowed_indices,
+    split_name,
+    *,
+    trajectory_index=None,
+    trajectory_number=None,
+):
+    """Resolve either a global ID or a one-based position within a split."""
+
+    if trajectory_index is not None and trajectory_number is not None:
+        raise ValueError("Use either --traj-idx or --traj-number, not both.")
+
+    if trajectory_number is not None:
+        if not 1 <= trajectory_number <= len(allowed_indices):
+            raise ValueError(
+                f"--traj-number must be between 1 and {len(allowed_indices)} "
+                f"for the {split_name} split. Got {trajectory_number}."
+            )
+        return int(allowed_indices[trajectory_number - 1])
+
+    if trajectory_index is None:
+        return int(allowed_indices[0])
+
+    if trajectory_index not in set(allowed_indices):
+        raise ValueError(
+            f"Trajectory {trajectory_index} is not in the {split_name} split."
+        )
+    return int(trajectory_index)
+
+
 def validate_checkpoint_split(checkpoint, manifest):
     """Reject a checkpoint that records a different dataset partition."""
     if not isinstance(checkpoint, dict):

@@ -1,0 +1,2195 @@
+{
+  "protocol": {
+    "name": "fixed_manifest_prefix_rollout_suite",
+    "version": 3,
+    "model": "MLP",
+    "split": "test",
+    "selection": "first trajectories in saved split-manifest order",
+    "trajectory_indices": [
+      2512,
+      455,
+      604,
+      2036,
+      978,
+      813,
+      2687,
+      562,
+      1714,
+      413,
+      1323,
+      1291,
+      693,
+      2203,
+      1846,
+      1820,
+      771,
+      1111,
+      2995,
+      714,
+      1256,
+      1389,
+      1715,
+      1515,
+      1608,
+      2436,
+      1747,
+      119,
+      1092,
+      2396,
+      1449,
+      1663,
+      1011,
+      1490,
+      2085,
+      1856,
+      1247,
+      96,
+      501,
+      1697,
+      1614,
+      2414,
+      1694,
+      762,
+      1486,
+      1500,
+      1581,
+      82,
+      1835,
+      1683
+    ],
+    "num_trajectories": 50,
+    "rollout_steps": 299,
+    "exclude_initial_state_from_error": true,
+    "acceleration_evaluation": "physical acceleration error on every saved true state from state 0 through rollout_steps",
+    "failure_definition": "non-finite position, velocity, or acceleration prediction; or max-step position RMSE greater than failure_threshold",
+    "failure_threshold": 0.1,
+    "conservation": {
+      "gravitational_constant": 1.0,
+      "softening_epsilon": 0.0,
+      "energy_drift_is_absolute": true,
+      "relative_energy_drift_is_absolute": true,
+      "center_of_mass_drift_definition": "Euclidean distance from the trajectory's initial center of mass",
+      "comparison": "predicted_minus_true subtracts the saved numerical trajectory drift from predicted drift per trajectory"
+    },
+    "checkpoint_path": "/Users/trillyonearl/Documents/Research/REU2026/experiments/checkpoints/mlp/one_step_115k_4h.pt",
+    "dataset_path": "/Users/trillyonearl/Documents/Research/REU2026/common/datasets/nbody_dataset.pt",
+    "split_path": "/Users/trillyonearl/Documents/Research/REU2026/experiments/splits/nbody_dataset.json"
+  },
+  "summary": {
+    "rollout_position_mse": {
+      "finite_count": 50,
+      "mean": 0.0007614218498929404,
+      "std": 0.001085183148394592,
+      "median": 0.00042618627776391804,
+      "worst": 0.005689145531505346,
+      "worst_trajectory_index": 1856
+    },
+    "rollout_position_rmse": {
+      "finite_count": 50,
+      "mean": 0.024087671690933135,
+      "std": 0.013461274917434774,
+      "median": 0.020644278725826644,
+      "worst": 0.07542642462363801,
+      "worst_trajectory_index": 1856
+    },
+    "final_step_position_rmse": {
+      "finite_count": 50,
+      "mean": 0.05305140405893326,
+      "std": 0.028810911593636846,
+      "median": 0.043701447546482086,
+      "worst": 0.16609331965446472,
+      "worst_trajectory_index": 1490
+    },
+    "max_step_position_rmse": {
+      "finite_count": 50,
+      "mean": 0.053054013550281526,
+      "std": 0.02881869028243115,
+      "median": 0.043701447546482086,
+      "worst": 0.16609331965446472,
+      "worst_trajectory_index": 1490
+    },
+    "acceleration_mse_on_true_states": {
+      "finite_count": 50,
+      "mean": 0.00387077361709089,
+      "std": 0.022622392912895414,
+      "median": 0.00018619410548126325,
+      "worst": 0.16191737353801727,
+      "worst_trajectory_index": 1856
+    },
+    "acceleration_rmse_on_true_states": {
+      "finite_count": 50,
+      "mean": 0.026869691079548206,
+      "std": 0.056114109797630554,
+      "median": 0.01364529448840595,
+      "worst": 0.4023895793109176,
+      "worst_trajectory_index": 1856
+    },
+    "conservation": {
+      "predicted": {
+        "final_absolute_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.04026923626661301,
+          "std": 0.03392540541496587,
+          "median": 0.034991323947906494,
+          "worst": 0.15586179494857788,
+          "worst_trajectory_index": 1486
+        },
+        "max_absolute_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.05276150673627853,
+          "std": 0.043011531906320156,
+          "median": 0.038344621658325195,
+          "worst": 0.24923992156982422,
+          "worst_trajectory_index": 1856
+        },
+        "final_absolute_relative_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.5901675785053522,
+          "std": 2.9330043499514558,
+          "median": 0.03690016455948353,
+          "worst": 20.730342864990234,
+          "worst_trajectory_index": 2085
+        },
+        "max_absolute_relative_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.607852166686207,
+          "std": 2.930750407201046,
+          "median": 0.049421120434999466,
+          "worst": 20.730342864990234,
+          "worst_trajectory_index": 2085
+        },
+        "final_center_of_mass_drift": {
+          "finite_count": 50,
+          "mean": 0.020400963095016777,
+          "std": 0.014043214767651581,
+          "median": 0.017891833558678627,
+          "worst": 0.08274242281913757,
+          "worst_trajectory_index": 1856
+        },
+        "max_center_of_mass_drift": {
+          "finite_count": 50,
+          "mean": 0.02040159471333027,
+          "std": 0.014042435990841609,
+          "median": 0.017891833558678627,
+          "worst": 0.08274242281913757,
+          "worst_trajectory_index": 1856
+        }
+      },
+      "true_numerical": {
+        "final_absolute_energy_drift": {
+          "finite_count": 50,
+          "mean": 7.581472396850586e-05,
+          "std": 0.00012507129495666758,
+          "median": 2.5779008865356445e-05,
+          "worst": 0.0006731748580932617,
+          "worst_trajectory_index": 501
+        },
+        "max_absolute_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.0005906093120574952,
+          "std": 0.0011750533507071735,
+          "median": 0.00012451410293579102,
+          "worst": 0.006599903106689453,
+          "worst_trajectory_index": 1856
+        },
+        "final_absolute_relative_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.0010155585447739668,
+          "std": 0.005031350202681413,
+          "median": 3.707703945110552e-05,
+          "worst": 0.03452466055750847,
+          "worst_trajectory_index": 2085
+        },
+        "max_absolute_relative_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.0022471695730655484,
+          "std": 0.006885095720125012,
+          "median": 0.00017516744992462918,
+          "worst": 0.0366690494120121,
+          "worst_trajectory_index": 2085
+        },
+        "final_center_of_mass_drift": {
+          "finite_count": 50,
+          "mean": 6.148496466096276e-07,
+          "std": 3.9151474514178797e-07,
+          "median": 5.58924284632667e-07,
+          "worst": 1.7235673794857576e-06,
+          "worst_trajectory_index": 978
+        },
+        "max_center_of_mass_drift": {
+          "finite_count": 50,
+          "mean": 7.802181494298566e-07,
+          "std": 3.9260840214053843e-07,
+          "median": 7.082051070028683e-07,
+          "worst": 1.7777097127691377e-06,
+          "worst_trajectory_index": 1714
+        }
+      },
+      "predicted_minus_true": {
+        "final_absolute_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.0401934215426445,
+          "std": 0.033931590243747846,
+          "median": 0.03481549024581909,
+          "worst": 0.15573722124099731,
+          "worst_trajectory_index": 1486
+        },
+        "max_absolute_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.05217089742422104,
+          "std": 0.042185066579996516,
+          "median": 0.03809037804603577,
+          "worst": 0.24264001846313477,
+          "worst_trajectory_index": 1856
+        },
+        "final_absolute_relative_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.5891520199605782,
+          "std": 2.928103186521168,
+          "median": 0.03686968985994099,
+          "worst": 20.695818204432726,
+          "worst_trajectory_index": 2085
+        },
+        "max_absolute_relative_energy_drift": {
+          "finite_count": 50,
+          "mean": 0.6056049971131415,
+          "std": 2.9253685094249464,
+          "median": 0.04900950372302759,
+          "worst": 20.693673815578222,
+          "worst_trajectory_index": 2085
+        },
+        "final_center_of_mass_drift": {
+          "finite_count": 50,
+          "mean": 0.020400348245370167,
+          "std": 0.014043238631131709,
+          "median": 0.017891381355781277,
+          "worst": 0.08274176599019256,
+          "worst_trajectory_index": 1856
+        },
+        "max_center_of_mass_drift": {
+          "finite_count": 50,
+          "mean": 0.02040081449518084,
+          "std": 0.01404248304039067,
+          "median": 0.017891337532489615,
+          "worst": 0.08274176599019256,
+          "worst_trajectory_index": 1856
+        }
+      }
+    },
+    "failure_count": 4,
+    "failure_rate": 0.08,
+    "failure_trajectory_indices": [
+      1608,
+      119,
+      1490,
+      1856
+    ],
+    "non_finite_count": 0,
+    "non_finite_trajectory_indices": [],
+    "non_finite_acceleration_count": 0,
+    "non_finite_acceleration_trajectory_indices": [],
+    "elapsed_seconds": 3.999234459362924
+  },
+  "per_trajectory": [
+    {
+      "trajectory_index": 2512,
+      "rollout_position_mse": 0.0004547681601252407,
+      "rollout_position_rmse": 0.02132529390477985,
+      "final_step_position_rmse": 0.057442739605903625,
+      "max_step_position_rmse": 0.057442739605903625,
+      "acceleration_mse_on_true_states": 0.006740947254002094,
+      "acceleration_rmse_on_true_states": 0.08210327188365939,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.06819319725036621,
+          "max_absolute_energy_drift": 0.10680866241455078,
+          "final_absolute_relative_energy_drift": 0.03771840035915375,
+          "max_absolute_relative_energy_drift": 0.059077031910419464,
+          "final_center_of_mass_drift": 0.0502350777387619,
+          "max_center_of_mass_drift": 0.0502350777387619
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 9.715557098388672e-05,
+          "max_absolute_energy_drift": 0.001522064208984375,
+          "final_absolute_relative_energy_drift": 5.373780368245207e-05,
+          "max_absolute_relative_energy_drift": 0.000841870263684541,
+          "final_center_of_mass_drift": 7.049423516036768e-07,
+          "max_center_of_mass_drift": 7.049423516036768e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.06809604167938232,
+          "max_absolute_energy_drift": 0.1052865982055664,
+          "final_absolute_relative_energy_drift": 0.037664662555471295,
+          "max_absolute_relative_energy_drift": 0.05823516164673492,
+          "final_center_of_mass_drift": 0.0502343727964103,
+          "max_center_of_mass_drift": 0.0502343727964103
+        }
+      }
+    },
+    {
+      "trajectory_index": 455,
+      "rollout_position_mse": 0.00021280726650729775,
+      "rollout_position_rmse": 0.01458791508431886,
+      "final_step_position_rmse": 0.0388094037771225,
+      "max_step_position_rmse": 0.0388094037771225,
+      "acceleration_mse_on_true_states": 8.95058547030203e-05,
+      "acceleration_rmse_on_true_states": 0.009460753389821568,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.0350642204284668,
+          "max_absolute_energy_drift": 0.0350642204284668,
+          "final_absolute_relative_energy_drift": 0.034928325563669205,
+          "max_absolute_relative_energy_drift": 0.034928325563669205,
+          "final_center_of_mass_drift": 0.02055710181593895,
+          "max_center_of_mass_drift": 0.02055710181593895
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 9.965896606445312e-05,
+          "max_absolute_energy_drift": 9.965896606445312e-05,
+          "final_absolute_relative_energy_drift": 9.927272913046181e-05,
+          "max_absolute_relative_energy_drift": 9.927272913046181e-05,
+          "final_center_of_mass_drift": 2.783191632715898e-07,
+          "max_center_of_mass_drift": 4.3570781826929306e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.034964561462402344,
+          "max_absolute_energy_drift": 0.034964561462402344,
+          "final_absolute_relative_energy_drift": 0.03482905283453874,
+          "max_absolute_relative_energy_drift": 0.03482905283453874,
+          "final_center_of_mass_drift": 0.020556823496775678,
+          "max_center_of_mass_drift": 0.02055666610812068
+        }
+      }
+    },
+    {
+      "trajectory_index": 604,
+      "rollout_position_mse": 0.0004259467532392591,
+      "rollout_position_rmse": 0.020638477493246907,
+      "final_step_position_rmse": 0.046484749764204025,
+      "max_step_position_rmse": 0.046484749764204025,
+      "acceleration_mse_on_true_states": 0.00018601347983349115,
+      "acceleration_rmse_on_true_states": 0.013638675882705445,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.0037881135940551758,
+          "max_absolute_energy_drift": 0.011709332466125488,
+          "final_absolute_relative_energy_drift": 0.002647561253979802,
+          "max_absolute_relative_energy_drift": 0.008183803409337997,
+          "final_center_of_mass_drift": 0.02840401791036129,
+          "max_center_of_mass_drift": 0.02840401791036129
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 1.6689300537109375e-06,
+          "max_absolute_energy_drift": 3.635883331298828e-05,
+          "final_absolute_relative_energy_drift": 1.1664367320918245e-06,
+          "max_absolute_relative_energy_drift": 2.5411656679352745e-05,
+          "final_center_of_mass_drift": 2.884072500819457e-07,
+          "max_center_of_mass_drift": 5.352787297852046e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.003786444664001465,
+          "max_absolute_energy_drift": 0.0116729736328125,
+          "final_absolute_relative_energy_drift": 0.0026463948172477103,
+          "max_absolute_relative_energy_drift": 0.008158391752658645,
+          "final_center_of_mass_drift": 0.028403729503111208,
+          "max_center_of_mass_drift": 0.028403482631631505
+        }
+      }
+    },
+    {
+      "trajectory_index": 2036,
+      "rollout_position_mse": 0.0001317440764978528,
+      "rollout_position_rmse": 0.011477982248542329,
+      "final_step_position_rmse": 0.023662462830543518,
+      "max_step_position_rmse": 0.023662462830543518,
+      "acceleration_mse_on_true_states": 4.844409704674035e-05,
+      "acceleration_rmse_on_true_states": 0.00696017938323003,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.0096052885055542,
+          "max_absolute_energy_drift": 0.0096052885055542,
+          "final_absolute_relative_energy_drift": 0.03677608445286751,
+          "max_absolute_relative_energy_drift": 0.03677608445286751,
+          "final_center_of_mass_drift": 0.0037350074853748083,
+          "max_center_of_mass_drift": 0.0037350074853748083
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 2.384185791015625e-06,
+          "max_absolute_energy_drift": 2.0742416381835938e-05,
+          "final_absolute_relative_energy_drift": 9.128410056291614e-06,
+          "max_absolute_relative_energy_drift": 7.941717194626108e-05,
+          "final_center_of_mass_drift": 7.140566822272376e-07,
+          "max_center_of_mass_drift": 7.324849207179795e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.009602904319763184,
+          "max_absolute_energy_drift": 0.009584546089172363,
+          "final_absolute_relative_energy_drift": 0.036766956042811216,
+          "max_absolute_relative_energy_drift": 0.03669666728092125,
+          "final_center_of_mass_drift": 0.003734293428692581,
+          "max_center_of_mass_drift": 0.0037342750004540903
+        }
+      }
+    },
+    {
+      "trajectory_index": 978,
+      "rollout_position_mse": 7.679981354158372e-05,
+      "rollout_position_rmse": 0.008763550281796968,
+      "final_step_position_rmse": 0.0201108455657959,
+      "max_step_position_rmse": 0.0201108455657959,
+      "acceleration_mse_on_true_states": 8.266483200713992e-05,
+      "acceleration_rmse_on_true_states": 0.009092020237941615,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.03764110803604126,
+          "max_absolute_energy_drift": 0.03764110803604126,
+          "final_absolute_relative_energy_drift": 0.07810063660144806,
+          "max_absolute_relative_energy_drift": 0.07810063660144806,
+          "final_center_of_mass_drift": 0.007286410313099623,
+          "max_center_of_mass_drift": 0.007286410313099623
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 9.5367431640625e-06,
+          "max_absolute_energy_drift": 1.4543533325195312e-05,
+          "final_absolute_relative_energy_drift": 1.9787561541306786e-05,
+          "max_absolute_relative_energy_drift": 3.0176030122675e-05,
+          "final_center_of_mass_drift": 1.7235673794857576e-06,
+          "max_center_of_mass_drift": 1.7744146134646144e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.0376315712928772,
+          "max_absolute_energy_drift": 0.037626564502716064,
+          "final_absolute_relative_energy_drift": 0.07808084903990675,
+          "max_absolute_relative_energy_drift": 0.07807046057132538,
+          "final_center_of_mass_drift": 0.007284686745720137,
+          "max_center_of_mass_drift": 0.007284635898486158
+        }
+      }
+    },
+    {
+      "trajectory_index": 813,
+      "rollout_position_mse": 0.0008027982548810542,
+      "rollout_position_rmse": 0.028333694691675036,
+      "final_step_position_rmse": 0.05797265097498894,
+      "max_step_position_rmse": 0.05797265097498894,
+      "acceleration_mse_on_true_states": 0.00021593757264781743,
+      "acceleration_rmse_on_true_states": 0.014694814481571975,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.00863415002822876,
+          "max_absolute_energy_drift": 0.023643136024475098,
+          "final_absolute_relative_energy_drift": 0.07522577047348022,
+          "max_absolute_relative_energy_drift": 0.20599284768104553,
+          "final_center_of_mass_drift": 0.01781827211380005,
+          "max_center_of_mass_drift": 0.01781827211380005
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 5.733966827392578e-05,
+          "max_absolute_energy_drift": 0.00039780139923095703,
+          "final_absolute_relative_energy_drift": 0.0004995767376385629,
+          "max_absolute_relative_energy_drift": 0.003465878777205944,
+          "final_center_of_mass_drift": 3.979387201979989e-07,
+          "max_center_of_mass_drift": 4.45382397629146e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.008576810359954834,
+          "max_absolute_energy_drift": 0.02324533462524414,
+          "final_absolute_relative_energy_drift": 0.07472619373584166,
+          "max_absolute_relative_energy_drift": 0.2025269689038396,
+          "final_center_of_mass_drift": 0.01781787417507985,
+          "max_center_of_mass_drift": 0.01781782673140242
+        }
+      }
+    },
+    {
+      "trajectory_index": 2687,
+      "rollout_position_mse": 0.0010253960499539971,
+      "rollout_position_rmse": 0.03202180585091973,
+      "final_step_position_rmse": 0.0727136880159378,
+      "max_step_position_rmse": 0.0727136880159378,
+      "acceleration_mse_on_true_states": 0.0006867856718599796,
+      "acceleration_rmse_on_true_states": 0.026206595960940438,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.007836341857910156,
+          "max_absolute_energy_drift": 0.013512849807739258,
+          "final_absolute_relative_energy_drift": 0.00936286710202694,
+          "max_absolute_relative_energy_drift": 0.016145164147019386,
+          "final_center_of_mass_drift": 0.023164493963122368,
+          "max_center_of_mass_drift": 0.023164493963122368
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 0.0002542734146118164,
+          "max_absolute_energy_drift": 0.0003829002380371094,
+          "final_absolute_relative_energy_drift": 0.00030380606767721474,
+          "max_absolute_relative_energy_drift": 0.00045748951379209757,
+          "final_center_of_mass_drift": 2.2448969616561953e-07,
+          "max_center_of_mass_drift": 4.2398687583045103e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.00758206844329834,
+          "max_absolute_energy_drift": 0.013129949569702148,
+          "final_absolute_relative_energy_drift": 0.009059061034349725,
+          "max_absolute_relative_energy_drift": 0.01568767463322729,
+          "final_center_of_mass_drift": 0.023164269473426202,
+          "max_center_of_mass_drift": 0.023164069976246537
+        }
+      }
+    },
+    {
+      "trajectory_index": 562,
+      "rollout_position_mse": 0.0005852509057149291,
+      "rollout_position_rmse": 0.02419195952615102,
+      "final_step_position_rmse": 0.05982787534594536,
+      "max_step_position_rmse": 0.05982787534594536,
+      "acceleration_mse_on_true_states": 0.0005235916469246149,
+      "acceleration_rmse_on_true_states": 0.022882125052639122,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.07277894020080566,
+          "max_absolute_energy_drift": 0.07277894020080566,
+          "final_absolute_relative_energy_drift": 0.06251014769077301,
+          "max_absolute_relative_energy_drift": 0.06251014769077301,
+          "final_center_of_mass_drift": 0.024487340822815895,
+          "max_center_of_mass_drift": 0.024487340822815895
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 1.9311904907226562e-05,
+          "max_absolute_energy_drift": 0.00026345252990722656,
+          "final_absolute_relative_energy_drift": 1.658707878959831e-05,
+          "max_absolute_relative_energy_drift": 0.0002262805210193619,
+          "final_center_of_mass_drift": 2.990276470882236e-07,
+          "max_center_of_mass_drift": 4.134552966661431e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.07275962829589844,
+          "max_absolute_energy_drift": 0.07251548767089844,
+          "final_absolute_relative_energy_drift": 0.06249356061198341,
+          "max_absolute_relative_energy_drift": 0.06228386716975365,
+          "final_center_of_mass_drift": 0.024487041795168807,
+          "max_center_of_mass_drift": 0.02448692736751923
+        }
+      }
+    },
+    {
+      "trajectory_index": 1714,
+      "rollout_position_mse": 0.0002960510610137135,
+      "rollout_position_rmse": 0.01720613440066401,
+      "final_step_position_rmse": 0.03657325729727745,
+      "max_step_position_rmse": 0.03657325729727745,
+      "acceleration_mse_on_true_states": 8.608940697740763e-05,
+      "acceleration_rmse_on_true_states": 0.00927843774443778,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.08217740058898926,
+          "max_absolute_energy_drift": 0.08217740058898926,
+          "final_absolute_relative_energy_drift": 3.1639740467071533,
+          "max_absolute_relative_energy_drift": 3.1639740467071533,
+          "final_center_of_mass_drift": 0.014342871494591236,
+          "max_center_of_mass_drift": 0.014342871494591236
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 2.3126602172851562e-05,
+          "max_absolute_energy_drift": 5.054473876953125e-05,
+          "final_absolute_relative_energy_drift": 0.0008904147543944418,
+          "max_absolute_relative_energy_drift": 0.0019460610346868634,
+          "final_center_of_mass_drift": 1.5669983213228988e-06,
+          "max_center_of_mass_drift": 1.7777097127691377e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.0821542739868164,
+          "max_absolute_energy_drift": 0.08212685585021973,
+          "final_absolute_relative_energy_drift": 3.163083631952759,
+          "max_absolute_relative_energy_drift": 3.1620279856724665,
+          "final_center_of_mass_drift": 0.014341304496269913,
+          "max_center_of_mass_drift": 0.014341093784878467
+        }
+      }
+    },
+    {
+      "trajectory_index": 413,
+      "rollout_position_mse": 0.0003584856167435646,
+      "rollout_position_rmse": 0.01893371640073772,
+      "final_step_position_rmse": 0.042851418256759644,
+      "max_step_position_rmse": 0.042851418256759644,
+      "acceleration_mse_on_true_states": 8.621781307738274e-05,
+      "acceleration_rmse_on_true_states": 0.009285354763140864,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.032649993896484375,
+          "max_absolute_energy_drift": 0.05946493148803711,
+          "final_absolute_relative_energy_drift": 0.024481022730469704,
+          "max_absolute_relative_energy_drift": 0.0445869080722332,
+          "final_center_of_mass_drift": 0.004851390141993761,
+          "max_center_of_mass_drift": 0.004851390141993761
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 5.245208740234375e-05,
+          "max_absolute_energy_drift": 6.914138793945312e-05,
+          "final_absolute_relative_energy_drift": 3.9328668208327144e-05,
+          "max_absolute_relative_energy_drift": 5.184233305044472e-05,
+          "final_center_of_mass_drift": 6.10886331742222e-07,
+          "max_center_of_mass_drift": 1.6164506178029114e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.03259754180908203,
+          "max_absolute_energy_drift": 0.059395790100097656,
+          "final_absolute_relative_energy_drift": 0.024441694062261377,
+          "max_absolute_relative_energy_drift": 0.044535065739182755,
+          "final_center_of_mass_drift": 0.004850779255662019,
+          "max_center_of_mass_drift": 0.004849773691375958
+        }
+      }
+    },
+    {
+      "trajectory_index": 1323,
+      "rollout_position_mse": 0.00048568888450972736,
+      "rollout_position_rmse": 0.022038350312800804,
+      "final_step_position_rmse": 0.050591517239809036,
+      "max_step_position_rmse": 0.050591517239809036,
+      "acceleration_mse_on_true_states": 0.0002023099223151803,
+      "acceleration_rmse_on_true_states": 0.01422356925371337,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.05781447887420654,
+          "max_absolute_energy_drift": 0.0658571720123291,
+          "final_absolute_relative_energy_drift": 0.04957161471247673,
+          "max_absolute_relative_energy_drift": 0.05646762624382973,
+          "final_center_of_mass_drift": 0.01751372404396534,
+          "max_center_of_mass_drift": 0.01751372404396534
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 5.2928924560546875e-05,
+          "max_absolute_energy_drift": 7.200241088867188e-05,
+          "final_absolute_relative_energy_drift": 4.5382614189293236e-05,
+          "max_absolute_relative_energy_drift": 6.173671135911718e-05,
+          "final_center_of_mass_drift": 4.297010889331432e-07,
+          "max_center_of_mass_drift": 5.579322532867081e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.057761549949645996,
+          "max_absolute_energy_drift": 0.06578516960144043,
+          "final_absolute_relative_energy_drift": 0.04952623209828744,
+          "max_absolute_relative_energy_drift": 0.05640588953247061,
+          "final_center_of_mass_drift": 0.017513294342876407,
+          "max_center_of_mass_drift": 0.017513166111712053
+        }
+      }
+    },
+    {
+      "trajectory_index": 1291,
+      "rollout_position_mse": 0.000281590037047863,
+      "rollout_position_rmse": 0.016780644714904817,
+      "final_step_position_rmse": 0.037226442247629166,
+      "max_step_position_rmse": 0.037226442247629166,
+      "acceleration_mse_on_true_states": 0.0001331132953055203,
+      "acceleration_rmse_on_true_states": 0.011537473523502461,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.08016741275787354,
+          "max_absolute_energy_drift": 0.08016741275787354,
+          "final_absolute_relative_energy_drift": 0.062368642538785934,
+          "max_absolute_relative_energy_drift": 0.062368642538785934,
+          "final_center_of_mass_drift": 0.020714327692985535,
+          "max_center_of_mass_drift": 0.020714327692985535
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 4.649162292480469e-06,
+          "max_absolute_energy_drift": 4.1484832763671875e-05,
+          "final_absolute_relative_energy_drift": 3.6169551549392054e-06,
+          "max_absolute_relative_energy_drift": 3.227436900488101e-05,
+          "final_center_of_mass_drift": 1.0087770760947024e-06,
+          "max_center_of_mass_drift": 1.1695956345647573e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.08016276359558105,
+          "max_absolute_energy_drift": 0.08012592792510986,
+          "final_absolute_relative_energy_drift": 0.062365025583630995,
+          "max_absolute_relative_energy_drift": 0.06233636816978105,
+          "final_center_of_mass_drift": 0.02071331891590944,
+          "max_center_of_mass_drift": 0.02071315809735097
+        }
+      }
+    },
+    {
+      "trajectory_index": 693,
+      "rollout_position_mse": 0.00047915460891090333,
+      "rollout_position_rmse": 0.021889600473990002,
+      "final_step_position_rmse": 0.04870129004120827,
+      "max_step_position_rmse": 0.04870129004120827,
+      "acceleration_mse_on_true_states": 0.00016583825345151126,
+      "acceleration_rmse_on_true_states": 0.012877820213510952,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.035912200808525085,
+          "max_absolute_energy_drift": 0.035912200808525085,
+          "final_absolute_relative_energy_drift": 0.2978743016719818,
+          "max_absolute_relative_energy_drift": 0.2978743016719818,
+          "final_center_of_mass_drift": 0.01673111319541931,
+          "max_center_of_mass_drift": 0.01673111319541931
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 5.364418029785156e-06,
+          "max_absolute_energy_drift": 5.4836273193359375e-06,
+          "final_absolute_relative_energy_drift": 4.449524567462504e-05,
+          "max_absolute_relative_energy_drift": 4.548403012449853e-05,
+          "final_center_of_mass_drift": 5.0173312615697796e-08,
+          "max_center_of_mass_drift": 1.4726052768310183e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.0359068363904953,
+          "max_absolute_energy_drift": 0.03590671718120575,
+          "final_absolute_relative_energy_drift": 0.2978298064263072,
+          "max_absolute_relative_energy_drift": 0.2978288176418573,
+          "final_center_of_mass_drift": 0.016731063022106696,
+          "max_center_of_mass_drift": 0.01672964059014248
+        }
+      }
+    },
+    {
+      "trajectory_index": 2203,
+      "rollout_position_mse": 0.0003590347187127918,
+      "rollout_position_rmse": 0.0189482114911353,
+      "final_step_position_rmse": 0.03783981129527092,
+      "max_step_position_rmse": 0.03783981129527092,
+      "acceleration_mse_on_true_states": 0.00013756642874795943,
+      "acceleration_rmse_on_true_states": 0.011728871588859664,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.001817464828491211,
+          "max_absolute_energy_drift": 0.04557442665100098,
+          "final_absolute_relative_energy_drift": 0.001456945901736617,
+          "max_absolute_relative_energy_drift": 0.03653411567211151,
+          "final_center_of_mass_drift": 0.003958271816372871,
+          "max_center_of_mass_drift": 0.003958271816372871
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 9.894371032714844e-06,
+          "max_absolute_energy_drift": 0.0002903938293457031,
+          "final_absolute_relative_energy_drift": 7.931686923257075e-06,
+          "max_absolute_relative_energy_drift": 0.00023279024753719568,
+          "final_center_of_mass_drift": 5.939403422416945e-07,
+          "max_center_of_mass_drift": 7.264609962476243e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.001807570457458496,
+          "max_absolute_energy_drift": 0.04528403282165527,
+          "final_absolute_relative_energy_drift": 0.00144901421481336,
+          "max_absolute_relative_energy_drift": 0.036301325424574316,
+          "final_center_of_mass_drift": 0.00395767787603063,
+          "max_center_of_mass_drift": 0.003957545355376624
+        }
+      }
+    },
+    {
+      "trajectory_index": 1846,
+      "rollout_position_mse": 0.00037154811434447765,
+      "rollout_position_rmse": 0.019275583372351603,
+      "final_step_position_rmse": 0.03837332874536514,
+      "max_step_position_rmse": 0.03837332874536514,
+      "acceleration_mse_on_true_states": 0.00018945283954963088,
+      "acceleration_rmse_on_true_states": 0.013764186846655013,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.08912098407745361,
+          "max_absolute_energy_drift": 0.08912098407745361,
+          "final_absolute_relative_energy_drift": 0.0845094844698906,
+          "max_absolute_relative_energy_drift": 0.0845094844698906,
+          "final_center_of_mass_drift": 0.010129818692803383,
+          "max_center_of_mass_drift": 0.010129818692803383
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 4.5299530029296875e-06,
+          "max_absolute_energy_drift": 1.0251998901367188e-05,
+          "final_absolute_relative_energy_drift": 4.2955539356626105e-06,
+          "max_absolute_relative_energy_drift": 9.72151701716939e-06,
+          "final_center_of_mass_drift": 7.495160048165417e-07,
+          "max_center_of_mass_drift": 8.948900358518586e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.08911645412445068,
+          "max_absolute_energy_drift": 0.08911073207855225,
+          "final_absolute_relative_energy_drift": 0.08450518891595493,
+          "max_absolute_relative_energy_drift": 0.08449976295287343,
+          "final_center_of_mass_drift": 0.010129069176798566,
+          "max_center_of_mass_drift": 0.010128923802767531
+        }
+      }
+    },
+    {
+      "trajectory_index": 1820,
+      "rollout_position_mse": 0.00039141016895882785,
+      "rollout_position_rmse": 0.019784088782625997,
+      "final_step_position_rmse": 0.03844102844595909,
+      "max_step_position_rmse": 0.03844102844595909,
+      "acceleration_mse_on_true_states": 0.00012737691577058285,
+      "acceleration_rmse_on_true_states": 0.011286138213338646,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.03757679462432861,
+          "max_absolute_energy_drift": 0.03757679462432861,
+          "final_absolute_relative_energy_drift": 0.029645752161741257,
+          "max_absolute_relative_energy_drift": 0.029645752161741257,
+          "final_center_of_mass_drift": 0.008870509453117847,
+          "max_center_of_mass_drift": 0.008870509453117847
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 3.0994415283203125e-06,
+          "max_absolute_energy_drift": 8.344650268554688e-06,
+          "final_absolute_relative_energy_drift": 2.445266545691993e-06,
+          "max_absolute_relative_energy_drift": 6.583409685845254e-06,
+          "final_center_of_mass_drift": 8.689261221661582e-07,
+          "max_center_of_mass_drift": 8.689261221661582e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.03757369518280029,
+          "max_absolute_energy_drift": 0.03756844997406006,
+          "final_absolute_relative_energy_drift": 0.029643306895195565,
+          "max_absolute_relative_energy_drift": 0.02963916875205541,
+          "final_center_of_mass_drift": 0.008869640526995681,
+          "max_center_of_mass_drift": 0.008869640526995681
+        }
+      }
+    },
+    {
+      "trajectory_index": 771,
+      "rollout_position_mse": 0.0006318409577943385,
+      "rollout_position_rmse": 0.025136446801295096,
+      "final_step_position_rmse": 0.06058882921934128,
+      "max_step_position_rmse": 0.06058882921934128,
+      "acceleration_mse_on_true_states": 0.0005363929085433483,
+      "acceleration_rmse_on_true_states": 0.023160157783213575,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.047445058822631836,
+          "max_absolute_energy_drift": 0.06371378898620605,
+          "final_absolute_relative_energy_drift": 0.02676074393093586,
+          "max_absolute_relative_energy_drift": 0.035936903208494186,
+          "final_center_of_mass_drift": 0.017614051699638367,
+          "max_center_of_mass_drift": 0.017614051699638367
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 0.00038552284240722656,
+          "max_absolute_energy_drift": 0.0004608631134033203,
+          "final_absolute_relative_energy_drift": 0.00021744894911535084,
+          "max_absolute_relative_energy_drift": 0.00025994362658821046,
+          "final_center_of_mass_drift": 2.909318936872296e-07,
+          "max_center_of_mass_drift": 4.2210717765556183e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.04705953598022461,
+          "max_absolute_energy_drift": 0.06325292587280273,
+          "final_absolute_relative_energy_drift": 0.02654329498182051,
+          "max_absolute_relative_energy_drift": 0.035676959581905976,
+          "final_center_of_mass_drift": 0.01761376076774468,
+          "max_center_of_mass_drift": 0.01761362959246071
+        }
+      }
+    },
+    {
+      "trajectory_index": 1111,
+      "rollout_position_mse": 0.00014396556071005762,
+      "rollout_position_rmse": 0.011998564943777969,
+      "final_step_position_rmse": 0.026145892217755318,
+      "max_step_position_rmse": 0.026145892217755318,
+      "acceleration_mse_on_true_states": 9.40954705583863e-05,
+      "acceleration_rmse_on_true_states": 0.009700281983446992,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.011378884315490723,
+          "max_absolute_energy_drift": 0.011411190032958984,
+          "final_absolute_relative_energy_drift": 0.006722496822476387,
+          "max_absolute_relative_energy_drift": 0.006741582415997982,
+          "final_center_of_mass_drift": 0.019070783630013466,
+          "max_center_of_mass_drift": 0.019070783630013466
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 2.2649765014648438e-06,
+          "max_absolute_energy_drift": 1.1444091796875e-05,
+          "final_absolute_relative_energy_drift": 1.3381186363403685e-06,
+          "max_absolute_relative_energy_drift": 6.76102035868098e-06,
+          "final_center_of_mass_drift": 5.521870320990274e-07,
+          "max_center_of_mass_drift": 7.114678624020598e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.011376619338989258,
+          "max_absolute_energy_drift": 0.01139974594116211,
+          "final_absolute_relative_energy_drift": 0.006721158703840047,
+          "max_absolute_relative_energy_drift": 0.006734821395639301,
+          "final_center_of_mass_drift": 0.019070231442981367,
+          "max_center_of_mass_drift": 0.019070072162151064
+        }
+      }
+    },
+    {
+      "trajectory_index": 2995,
+      "rollout_position_mse": 9.313573536928743e-05,
+      "rollout_position_rmse": 0.009650685746064237,
+      "final_step_position_rmse": 0.022545872256159782,
+      "max_step_position_rmse": 0.022545872256159782,
+      "acceleration_mse_on_true_states": 9.137715096585453e-05,
+      "acceleration_rmse_on_true_states": 0.009559139656153922,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.016461491584777832,
+          "max_absolute_energy_drift": 0.016461491584777832,
+          "final_absolute_relative_energy_drift": 0.048147447407245636,
+          "max_absolute_relative_energy_drift": 0.048147447407245636,
+          "final_center_of_mass_drift": 0.015736006200313568,
+          "max_center_of_mass_drift": 0.015736006200313568
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 6.318092346191406e-06,
+          "max_absolute_energy_drift": 6.318092346191406e-06,
+          "final_absolute_relative_energy_drift": 1.8479493519407697e-05,
+          "max_absolute_relative_energy_drift": 1.8479493519407697e-05,
+          "final_center_of_mass_drift": 1.1090806992797297e-06,
+          "max_center_of_mass_drift": 1.1163381259393645e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.01645517349243164,
+          "max_absolute_energy_drift": 0.01645517349243164,
+          "final_absolute_relative_energy_drift": 0.04812896791372623,
+          "max_absolute_relative_energy_drift": 0.04812896791372623,
+          "final_center_of_mass_drift": 0.01573489711961429,
+          "max_center_of_mass_drift": 0.01573488986218763
+        }
+      }
+    },
+    {
+      "trajectory_index": 714,
+      "rollout_position_mse": 0.0003811257192865014,
+      "rollout_position_rmse": 0.019522441427406088,
+      "final_step_position_rmse": 0.044215764850378036,
+      "max_step_position_rmse": 0.044215764850378036,
+      "acceleration_mse_on_true_states": 0.00036352218012325466,
+      "acceleration_rmse_on_true_states": 0.01906625763287737,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.05572915077209473,
+          "max_absolute_energy_drift": 0.07614278793334961,
+          "final_absolute_relative_energy_drift": 0.10709847509860992,
+          "max_absolute_relative_energy_drift": 0.14632874727249146,
+          "final_center_of_mass_drift": 0.008759441785514355,
+          "max_center_of_mass_drift": 0.008759441785514355
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 1.6927719116210938e-05,
+          "max_absolute_energy_drift": 0.0008440017700195312,
+          "final_absolute_relative_energy_drift": 3.253114118706435e-05,
+          "max_absolute_relative_energy_drift": 0.0016219753306359053,
+          "final_center_of_mass_drift": 5.656615371663065e-07,
+          "max_center_of_mass_drift": 6.324287937786721e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.055712223052978516,
+          "max_absolute_energy_drift": 0.07529878616333008,
+          "final_absolute_relative_energy_drift": 0.10706594395742286,
+          "max_absolute_relative_energy_drift": 0.14470677194185555,
+          "final_center_of_mass_drift": 0.008758876123977188,
+          "max_center_of_mass_drift": 0.008758809356720576
+        }
+      }
+    },
+    {
+      "trajectory_index": 1256,
+      "rollout_position_mse": 0.00037985469680279493,
+      "rollout_position_rmse": 0.019489861384904588,
+      "final_step_position_rmse": 0.03932180255651474,
+      "max_step_position_rmse": 0.03932180255651474,
+      "acceleration_mse_on_true_states": 7.761562301311642e-05,
+      "acceleration_rmse_on_true_states": 0.008809972929193166,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.01740962266921997,
+          "max_absolute_energy_drift": 0.018505513668060303,
+          "final_absolute_relative_energy_drift": 0.019535915926098824,
+          "max_absolute_relative_energy_drift": 0.020765651017427444,
+          "final_center_of_mass_drift": 0.01525926310569048,
+          "max_center_of_mass_drift": 0.01525926310569048
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 2.1457672119140625e-06,
+          "max_absolute_energy_drift": 2.5033950805664062e-06,
+          "final_absolute_relative_energy_drift": 2.407836745987879e-06,
+          "max_absolute_relative_energy_drift": 2.8091428703191923e-06,
+          "final_center_of_mass_drift": 9.460823662266193e-07,
+          "max_center_of_mass_drift": 9.973578016797546e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.017407476902008057,
+          "max_absolute_energy_drift": 0.018503010272979736,
+          "final_absolute_relative_energy_drift": 0.019533508089352836,
+          "max_absolute_relative_energy_drift": 0.020762841874557125,
+          "final_center_of_mass_drift": 0.015258317023324253,
+          "max_center_of_mass_drift": 0.0152582657478888
+        }
+      }
+    },
+    {
+      "trajectory_index": 1389,
+      "rollout_position_mse": 0.000621217826846987,
+      "rollout_position_rmse": 0.02492424175069298,
+      "final_step_position_rmse": 0.0470486544072628,
+      "max_step_position_rmse": 0.0470486544072628,
+      "acceleration_mse_on_true_states": 0.00016519674682058394,
+      "acceleration_rmse_on_true_states": 0.012852888656663293,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.05472445487976074,
+          "max_absolute_energy_drift": 0.05487096309661865,
+          "final_absolute_relative_energy_drift": 0.09634298831224442,
+          "max_absolute_relative_energy_drift": 0.09660091251134872,
+          "final_center_of_mass_drift": 0.018871698528528214,
+          "max_center_of_mass_drift": 0.018871698528528214
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 3.5762786865234375e-07,
+          "max_absolute_energy_drift": 0.0001347064971923828,
+          "final_absolute_relative_energy_drift": 6.296076549006102e-07,
+          "max_absolute_relative_energy_drift": 0.00023715222778264433,
+          "final_center_of_mass_drift": 7.571304649900412e-07,
+          "max_center_of_mass_drift": 9.118857065004704e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.05472409725189209,
+          "max_absolute_energy_drift": 0.05473625659942627,
+          "final_absolute_relative_energy_drift": 0.09634235870458951,
+          "max_absolute_relative_energy_drift": 0.09636376028356608,
+          "final_center_of_mass_drift": 0.018870941398063223,
+          "max_center_of_mass_drift": 0.018870786642821713
+        }
+      }
+    },
+    {
+      "trajectory_index": 1715,
+      "rollout_position_mse": 0.00045260286424309015,
+      "rollout_position_rmse": 0.021274465075368877,
+      "final_step_position_rmse": 0.03997892886400223,
+      "max_step_position_rmse": 0.03997892886400223,
+      "acceleration_mse_on_true_states": 0.00023773536668159068,
+      "acceleration_rmse_on_true_states": 0.015418669419946414,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.040131449699401855,
+          "max_absolute_energy_drift": 0.040131449699401855,
+          "final_absolute_relative_energy_drift": 0.12332598119974136,
+          "max_absolute_relative_energy_drift": 0.12332598119974136,
+          "final_center_of_mass_drift": 0.022733228281140327,
+          "max_center_of_mass_drift": 0.022733228281140327
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 6.264448165893555e-05,
+          "max_absolute_energy_drift": 0.0003496408462524414,
+          "final_absolute_relative_energy_drift": 0.00019250967307016253,
+          "max_absolute_relative_energy_drift": 0.0010744640603661537,
+          "final_center_of_mass_drift": 6.113234007898427e-07,
+          "max_center_of_mass_drift": 7.354560693784151e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.04006880521774292,
+          "max_absolute_energy_drift": 0.039781808853149414,
+          "final_absolute_relative_energy_drift": 0.1231334715266712,
+          "max_absolute_relative_energy_drift": 0.12225151713937521,
+          "final_center_of_mass_drift": 0.022732616957739538,
+          "max_center_of_mass_drift": 0.02273249282507095
+        }
+      }
+    },
+    {
+      "trajectory_index": 1515,
+      "rollout_position_mse": 0.0005381915834732354,
+      "rollout_position_rmse": 0.023198956516904706,
+      "final_step_position_rmse": 0.060765717178583145,
+      "max_step_position_rmse": 0.060765717178583145,
+      "acceleration_mse_on_true_states": 0.0005118758999742568,
+      "acceleration_rmse_on_true_states": 0.022624674582726195,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.08388710021972656,
+          "max_absolute_energy_drift": 0.09764671325683594,
+          "final_absolute_relative_energy_drift": 0.06893395632505417,
+          "max_absolute_relative_energy_drift": 0.08024086803197861,
+          "final_center_of_mass_drift": 0.007121452130377293,
+          "max_center_of_mass_drift": 0.007121452130377293
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 3.62396240234375e-05,
+          "max_absolute_energy_drift": 0.0018596649169921875,
+          "final_absolute_relative_energy_drift": 2.9779794203932397e-05,
+          "max_absolute_relative_energy_drift": 0.0015281736850738525,
+          "final_center_of_mass_drift": 7.249446980495122e-07,
+          "max_center_of_mass_drift": 7.249446980495122e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.08385086059570312,
+          "max_absolute_energy_drift": 0.09578704833984375,
+          "final_absolute_relative_energy_drift": 0.06890417653085024,
+          "max_absolute_relative_energy_drift": 0.07871269434690475,
+          "final_center_of_mass_drift": 0.007120727185679243,
+          "max_center_of_mass_drift": 0.007120727185679243
+        }
+      }
+    },
+    {
+      "trajectory_index": 1608,
+      "rollout_position_mse": 0.0018437175313010812,
+      "rollout_position_rmse": 0.04293853201148219,
+      "final_step_position_rmse": 0.10982707142829895,
+      "max_step_position_rmse": 0.10982707142829895,
+      "acceleration_mse_on_true_states": 0.004410599824041128,
+      "acceleration_rmse_on_true_states": 0.06641234692465799,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": true,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.014558076858520508,
+          "max_absolute_energy_drift": 0.043108463287353516,
+          "final_absolute_relative_energy_drift": 0.011720821261405945,
+          "max_absolute_relative_energy_drift": 0.0347069576382637,
+          "final_center_of_mass_drift": 0.017965395003557205,
+          "max_center_of_mass_drift": 0.017965395003557205
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 0.00010466575622558594,
+          "max_absolute_energy_drift": 0.0026030540466308594,
+          "final_absolute_relative_energy_drift": 8.426721615251154e-05,
+          "max_absolute_relative_energy_drift": 0.002095739124342799,
+          "final_center_of_mass_drift": 5.064670745014155e-07,
+          "max_center_of_mass_drift": 5.46669980394654e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.014453411102294922,
+          "max_absolute_energy_drift": 0.040505409240722656,
+          "final_absolute_relative_energy_drift": 0.011636554045253433,
+          "max_absolute_relative_energy_drift": 0.0326112185139209,
+          "final_center_of_mass_drift": 0.017964888536482704,
+          "max_center_of_mass_drift": 0.01796484833357681
+        }
+      }
+    },
+    {
+      "trajectory_index": 2436,
+      "rollout_position_mse": 0.00042642580228857696,
+      "rollout_position_rmse": 0.020650079958406384,
+      "final_step_position_rmse": 0.043187130242586136,
+      "max_step_position_rmse": 0.043187130242586136,
+      "acceleration_mse_on_true_states": 0.00011328747496008873,
+      "acceleration_rmse_on_true_states": 0.010643658908481084,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.0022002458572387695,
+          "max_absolute_energy_drift": 0.011783123016357422,
+          "final_absolute_relative_energy_drift": 0.0030269217677414417,
+          "max_absolute_relative_energy_drift": 0.016210274770855904,
+          "final_center_of_mass_drift": 0.01929905265569687,
+          "max_center_of_mass_drift": 0.01929905265569687
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 2.8431415557861328e-05,
+          "max_absolute_energy_drift": 3.063678741455078e-05,
+          "final_absolute_relative_energy_drift": 3.911366002284922e-05,
+          "max_absolute_relative_energy_drift": 4.214763248455711e-05,
+          "final_center_of_mass_drift": 1.1070123946410604e-06,
+          "max_center_of_mass_drift": 1.1070123946410604e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.002171814441680908,
+          "max_absolute_energy_drift": 0.011752486228942871,
+          "final_absolute_relative_energy_drift": 0.0029878081077185925,
+          "max_absolute_relative_energy_drift": 0.016168127138371347,
+          "final_center_of_mass_drift": 0.019297945643302228,
+          "max_center_of_mass_drift": 0.019297945643302228
+        }
+      }
+    },
+    {
+      "trajectory_index": 1747,
+      "rollout_position_mse": 0.0017498615197837353,
+      "rollout_position_rmse": 0.04183134613879567,
+      "final_step_position_rmse": 0.07943450659513474,
+      "max_step_position_rmse": 0.07943450659513474,
+      "acceleration_mse_on_true_states": 0.0002864098350983113,
+      "acceleration_rmse_on_true_states": 0.016923647216197556,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.008877158164978027,
+          "max_absolute_energy_drift": 0.025733232498168945,
+          "final_absolute_relative_energy_drift": 0.006933907512575388,
+          "max_absolute_relative_energy_drift": 0.02010011114180088,
+          "final_center_of_mass_drift": 0.02417617477476597,
+          "max_center_of_mass_drift": 0.02417617477476597
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 8.463859558105469e-05,
+          "max_absolute_energy_drift": 0.00012671947479248047,
+          "final_absolute_relative_energy_drift": 6.611082062590867e-05,
+          "max_absolute_relative_energy_drift": 9.898000280372798e-05,
+          "final_center_of_mass_drift": 1.8227858333830227e-07,
+          "max_center_of_mass_drift": 2.7084718112746486e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.008792519569396973,
+          "max_absolute_energy_drift": 0.025606513023376465,
+          "final_absolute_relative_energy_drift": 0.006867796691949479,
+          "max_absolute_relative_energy_drift": 0.020001131138997152,
+          "final_center_of_mass_drift": 0.02417599249618263,
+          "max_center_of_mass_drift": 0.02417590392758484
+        }
+      }
+    },
+    {
+      "trajectory_index": 119,
+      "rollout_position_mse": 0.002248465782031417,
+      "rollout_position_rmse": 0.047417990067393376,
+      "final_step_position_rmse": 0.10709862411022186,
+      "max_step_position_rmse": 0.10709862411022186,
+      "acceleration_mse_on_true_states": 0.00032440145150758326,
+      "acceleration_rmse_on_true_states": 0.018011147978615447,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": true,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.09841370582580566,
+          "max_absolute_energy_drift": 0.10158133506774902,
+          "final_absolute_relative_energy_drift": 0.06838712841272354,
+          "max_absolute_relative_energy_drift": 0.07058829814195633,
+          "final_center_of_mass_drift": 0.021690916270017624,
+          "max_center_of_mass_drift": 0.021690916270017624
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 5.042552947998047e-05,
+          "max_absolute_energy_drift": 5.054473876953125e-05,
+          "final_absolute_relative_energy_drift": 3.504041887936182e-05,
+          "max_absolute_relative_energy_drift": 3.51232556567993e-05,
+          "final_center_of_mass_drift": 2.879371834296762e-07,
+          "max_center_of_mass_drift": 4.973445015821198e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.09836328029632568,
+          "max_absolute_energy_drift": 0.10153079032897949,
+          "final_absolute_relative_energy_drift": 0.06835208799384418,
+          "max_absolute_relative_energy_drift": 0.07055317488629953,
+          "final_center_of_mass_drift": 0.021690628332834194,
+          "max_center_of_mass_drift": 0.021690418925516042
+        }
+      }
+    },
+    {
+      "trajectory_index": 1092,
+      "rollout_position_mse": 8.525376324541867e-05,
+      "rollout_position_rmse": 0.009233296445225761,
+      "final_step_position_rmse": 0.0219211857765913,
+      "max_step_position_rmse": 0.0219211857765913,
+      "acceleration_mse_on_true_states": 0.0005570247885771096,
+      "acceleration_rmse_on_true_states": 0.023601372599429668,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.001196444034576416,
+          "max_absolute_energy_drift": 0.01973748207092285,
+          "final_absolute_relative_energy_drift": 0.001349125406704843,
+          "max_absolute_relative_energy_drift": 0.022256234660744667,
+          "final_center_of_mass_drift": 0.022305255755782127,
+          "max_center_of_mass_drift": 0.022305255755782127
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 1.531839370727539e-05,
+          "max_absolute_energy_drift": 9.965896606445312e-05,
+          "final_absolute_relative_energy_drift": 1.727321432554163e-05,
+          "max_absolute_relative_energy_drift": 0.00011237670696573332,
+          "final_center_of_mass_drift": 2.772318055122014e-07,
+          "max_center_of_mass_drift": 9.978093657991849e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.0011811256408691406,
+          "max_absolute_energy_drift": 0.0196378231048584,
+          "final_absolute_relative_energy_drift": 0.0013318521923793014,
+          "max_absolute_relative_energy_drift": 0.022143857953778934,
+          "final_center_of_mass_drift": 0.022304978523976615,
+          "max_center_of_mass_drift": 0.022304257946416328
+        }
+      }
+    },
+    {
+      "trajectory_index": 2396,
+      "rollout_position_mse": 0.0001950978912645951,
+      "rollout_position_rmse": 0.013967744673518166,
+      "final_step_position_rmse": 0.02631218545138836,
+      "max_step_position_rmse": 0.02631218545138836,
+      "acceleration_mse_on_true_states": 9.90706539596431e-05,
+      "acceleration_rmse_on_true_states": 0.009953424232878004,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.021645545959472656,
+          "max_absolute_energy_drift": 0.021645545959472656,
+          "final_absolute_relative_energy_drift": 0.024386519566178322,
+          "max_absolute_relative_energy_drift": 0.024386519566178322,
+          "final_center_of_mass_drift": 0.01685992069542408,
+          "max_center_of_mass_drift": 0.01685992069542408
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 3.510713577270508e-05,
+          "max_absolute_energy_drift": 5.501508712768555e-05,
+          "final_absolute_relative_energy_drift": 3.955274951294996e-05,
+          "max_absolute_relative_energy_drift": 6.198164192028344e-05,
+          "final_center_of_mass_drift": 6.994081331868074e-07,
+          "max_center_of_mass_drift": 7.307304485948407e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.02161043882369995,
+          "max_absolute_energy_drift": 0.02159053087234497,
+          "final_absolute_relative_energy_drift": 0.024346966816665372,
+          "max_absolute_relative_energy_drift": 0.02432453792425804,
+          "final_center_of_mass_drift": 0.016859221287290893,
+          "max_center_of_mass_drift": 0.016859189964975485
+        }
+      }
+    },
+    {
+      "trajectory_index": 1449,
+      "rollout_position_mse": 0.00123539415653795,
+      "rollout_position_rmse": 0.035148174298787555,
+      "final_step_position_rmse": 0.07770014554262161,
+      "max_step_position_rmse": 0.07770014554262161,
+      "acceleration_mse_on_true_states": 0.00018637473112903535,
+      "acceleration_rmse_on_true_states": 0.013651913094106457,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.028943419456481934,
+          "max_absolute_energy_drift": 0.038720130920410156,
+          "final_absolute_relative_energy_drift": 0.020161373540759087,
+          "max_absolute_relative_energy_drift": 0.02697162516415119,
+          "final_center_of_mass_drift": 0.0029003971721976995,
+          "max_center_of_mass_drift": 0.0029003971721976995
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 8.821487426757812e-06,
+          "max_absolute_energy_drift": 0.0001659393310546875,
+          "final_absolute_relative_energy_drift": 6.144861799839418e-06,
+          "max_absolute_relative_energy_drift": 0.00011558982805581763,
+          "final_center_of_mass_drift": 4.1944096551560506e-07,
+          "max_center_of_mass_drift": 4.4634987261815695e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.028934597969055176,
+          "max_absolute_energy_drift": 0.03855419158935547,
+          "final_absolute_relative_energy_drift": 0.020155228678959247,
+          "max_absolute_relative_energy_drift": 0.026856035336095374,
+          "final_center_of_mass_drift": 0.002899977731232184,
+          "max_center_of_mass_drift": 0.0028999508223250814
+        }
+      }
+    },
+    {
+      "trajectory_index": 1663,
+      "rollout_position_mse": 0.0002427446306683123,
+      "rollout_position_rmse": 0.0155802641398762,
+      "final_step_position_rmse": 0.0349697507917881,
+      "max_step_position_rmse": 0.0349697507917881,
+      "acceleration_mse_on_true_states": 0.000147372018545866,
+      "acceleration_rmse_on_true_states": 0.01213968774499023,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.03491842746734619,
+          "max_absolute_energy_drift": 0.03491842746734619,
+          "final_absolute_relative_energy_drift": 0.03380527347326279,
+          "max_absolute_relative_energy_drift": 0.03380527347326279,
+          "final_center_of_mass_drift": 0.017649704590439796,
+          "max_center_of_mass_drift": 0.017649704590439796
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 0.00025200843811035156,
+          "max_absolute_energy_drift": 0.00025200843811035156,
+          "final_absolute_relative_energy_drift": 0.0002439747186144814,
+          "max_absolute_relative_energy_drift": 0.0002439747186144814,
+          "final_center_of_mass_drift": 2.0736872841098375e-07,
+          "max_center_of_mass_drift": 3.7473836300705443e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.03466641902923584,
+          "max_absolute_energy_drift": 0.03466641902923584,
+          "final_absolute_relative_energy_drift": 0.033561298754648305,
+          "max_absolute_relative_energy_drift": 0.033561298754648305,
+          "final_center_of_mass_drift": 0.017649497221711385,
+          "max_center_of_mass_drift": 0.01764932985207679
+        }
+      }
+    },
+    {
+      "trajectory_index": 1011,
+      "rollout_position_mse": 0.0002579913998488337,
+      "rollout_position_rmse": 0.01606211069096567,
+      "final_step_position_rmse": 0.033008262515068054,
+      "max_step_position_rmse": 0.033008262515068054,
+      "acceleration_mse_on_true_states": 9.0987108706031e-05,
+      "acceleration_rmse_on_true_states": 0.009538716302838186,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.012055158615112305,
+          "max_absolute_energy_drift": 0.012424468994140625,
+          "final_absolute_relative_energy_drift": 0.012053519487380981,
+          "max_absolute_relative_energy_drift": 0.012422779574990273,
+          "final_center_of_mass_drift": 0.012429851107299328,
+          "max_center_of_mass_drift": 0.012429851107299328
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 0.0004150867462158203,
+          "max_absolute_energy_drift": 0.0004150867462158203,
+          "final_absolute_relative_energy_drift": 0.00041503028478473425,
+          "max_absolute_relative_energy_drift": 0.00041503028478473425,
+          "final_center_of_mass_drift": 1.7037552879628493e-07,
+          "max_center_of_mass_drift": 3.7514780615310883e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.011640071868896484,
+          "max_absolute_energy_drift": 0.012009382247924805,
+          "final_absolute_relative_energy_drift": 0.011638489202596247,
+          "max_absolute_relative_energy_drift": 0.012007749290205538,
+          "final_center_of_mass_drift": 0.012429680731770532,
+          "max_center_of_mass_drift": 0.012429475959493175
+        }
+      }
+    },
+    {
+      "trajectory_index": 1490,
+      "rollout_position_mse": 0.005406048148870468,
+      "rollout_position_rmse": 0.07352583320759085,
+      "final_step_position_rmse": 0.16609331965446472,
+      "max_step_position_rmse": 0.16609331965446472,
+      "acceleration_mse_on_true_states": 0.0005958990077488124,
+      "acceleration_rmse_on_true_states": 0.024411042741939813,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": true,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.0025467872619628906,
+          "max_absolute_energy_drift": 0.0376133918762207,
+          "final_absolute_relative_energy_drift": 0.0013128380523994565,
+          "max_absolute_relative_energy_drift": 0.01938924938440323,
+          "final_center_of_mass_drift": 0.013384686782956123,
+          "max_center_of_mass_drift": 0.013384686782956123
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 3.218650817871094e-05,
+          "max_absolute_energy_drift": 0.00015401840209960938,
+          "final_absolute_relative_energy_drift": 1.6591755411354825e-05,
+          "max_absolute_relative_energy_drift": 7.939462375361472e-05,
+          "final_center_of_mass_drift": 4.126516159885796e-07,
+          "max_center_of_mass_drift": 4.789996523868467e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.0025146007537841797,
+          "max_absolute_energy_drift": 0.037459373474121094,
+          "final_absolute_relative_energy_drift": 0.0012962462969881017,
+          "max_absolute_relative_energy_drift": 0.019309854760649614,
+          "final_center_of_mass_drift": 0.013384274131340135,
+          "max_center_of_mass_drift": 0.013384207783303737
+        }
+      }
+    },
+    {
+      "trajectory_index": 2085,
+      "rollout_position_mse": 0.00017730766558088362,
+      "rollout_position_rmse": 0.013315692455928967,
+      "final_step_position_rmse": 0.03145650401711464,
+      "max_step_position_rmse": 0.03145650401711464,
+      "acceleration_mse_on_true_states": 0.00013327096530701965,
+      "acceleration_rmse_on_true_states": 0.011544304453150031,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.0691455602645874,
+          "max_absolute_energy_drift": 0.0691455602645874,
+          "final_absolute_relative_energy_drift": 20.730342864990234,
+          "max_absolute_relative_energy_drift": 20.730342864990234,
+          "final_center_of_mass_drift": 0.0030708753038197756,
+          "max_center_of_mass_drift": 0.003102456219494343
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 0.00011515617370605469,
+          "max_absolute_energy_drift": 0.00012230873107910156,
+          "final_absolute_relative_energy_drift": 0.03452466055750847,
+          "max_absolute_relative_energy_drift": 0.0366690494120121,
+          "final_center_of_mass_drift": 4.958802719556843e-07,
+          "max_center_of_mass_drift": 6.353811841108836e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.06903040409088135,
+          "max_absolute_energy_drift": 0.0690232515335083,
+          "final_absolute_relative_energy_drift": 20.695818204432726,
+          "max_absolute_relative_energy_drift": 20.693673815578222,
+          "final_center_of_mass_drift": 0.00307037942354782,
+          "max_center_of_mass_drift": 0.003101820838310232
+        }
+      }
+    },
+    {
+      "trajectory_index": 1856,
+      "rollout_position_mse": 0.005689145531505346,
+      "rollout_position_rmse": 0.07542642462363801,
+      "final_step_position_rmse": 0.1388821303844452,
+      "max_step_position_rmse": 0.13901260495185852,
+      "acceleration_mse_on_true_states": 0.16191737353801727,
+      "acceleration_rmse_on_true_states": 0.4023895793109176,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": true,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.10802698135375977,
+          "max_absolute_energy_drift": 0.24923992156982422,
+          "final_absolute_relative_energy_drift": 0.027689160779118538,
+          "max_absolute_relative_energy_drift": 0.06388445198535919,
+          "final_center_of_mass_drift": 0.08274242281913757,
+          "max_center_of_mass_drift": 0.08274242281913757
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 9.751319885253906e-05,
+          "max_absolute_energy_drift": 0.006599903106689453,
+          "final_absolute_relative_energy_drift": 2.4994298655656166e-05,
+          "max_absolute_relative_energy_drift": 0.001691667945124209,
+          "final_center_of_mass_drift": 6.568289450115117e-07,
+          "max_center_of_mass_drift": 6.568289450115117e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.10792946815490723,
+          "max_absolute_energy_drift": 0.24264001846313477,
+          "final_absolute_relative_energy_drift": 0.027664166480462882,
+          "max_absolute_relative_energy_drift": 0.06219278404023498,
+          "final_center_of_mass_drift": 0.08274176599019256,
+          "max_center_of_mass_drift": 0.08274176599019256
+        }
+      }
+    },
+    {
+      "trajectory_index": 1247,
+      "rollout_position_mse": 0.000789532670751214,
+      "rollout_position_rmse": 0.028098624001029197,
+      "final_step_position_rmse": 0.05665273219347,
+      "max_step_position_rmse": 0.05665273219347,
+      "acceleration_mse_on_true_states": 0.00018937909044325352,
+      "acceleration_rmse_on_true_states": 0.013761507564335149,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.022179245948791504,
+          "max_absolute_energy_drift": 0.058547377586364746,
+          "final_absolute_relative_energy_drift": 0.02652989700436592,
+          "max_absolute_relative_energy_drift": 0.07003195583820343,
+          "final_center_of_mass_drift": 0.011369657702744007,
+          "max_center_of_mass_drift": 0.011369657702744007
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 0.00019061565399169922,
+          "max_absolute_energy_drift": 0.00021255016326904297,
+          "final_absolute_relative_energy_drift": 0.0002280065673403442,
+          "max_absolute_relative_energy_drift": 0.00025424372870475054,
+          "final_center_of_mass_drift": 1.4174454463500297e-06,
+          "max_center_of_mass_drift": 1.6227334072027588e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.021988630294799805,
+          "max_absolute_energy_drift": 0.0583348274230957,
+          "final_absolute_relative_energy_drift": 0.026301890437025577,
+          "max_absolute_relative_energy_drift": 0.06977771210949868,
+          "final_center_of_mass_drift": 0.011368240257297657,
+          "max_center_of_mass_drift": 0.011368034969336804
+        }
+      }
+    },
+    {
+      "trajectory_index": 96,
+      "rollout_position_mse": 0.00047103335964493454,
+      "rollout_position_rmse": 0.02170330296625227,
+      "final_step_position_rmse": 0.05155691131949425,
+      "max_step_position_rmse": 0.05155691131949425,
+      "acceleration_mse_on_true_states": 0.00010047623072750866,
+      "acceleration_rmse_on_true_states": 0.010023783254216377,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.035279035568237305,
+          "max_absolute_energy_drift": 0.035279035568237305,
+          "final_absolute_relative_energy_drift": 0.04581818729639053,
+          "max_absolute_relative_energy_drift": 0.04581818729639053,
+          "final_center_of_mass_drift": 0.009077446535229683,
+          "max_center_of_mass_drift": 0.009077446535229683
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 7.3909759521484375e-06,
+          "max_absolute_energy_drift": 7.3909759521484375e-06,
+          "final_absolute_relative_energy_drift": 9.598933502275031e-06,
+          "max_absolute_relative_energy_drift": 9.598933502275031e-06,
+          "final_center_of_mass_drift": 1.6803105040708033e-07,
+          "max_center_of_mass_drift": 4.1546169882167305e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.035271644592285156,
+          "max_absolute_energy_drift": 0.035271644592285156,
+          "final_absolute_relative_energy_drift": 0.04580858836288826,
+          "max_absolute_relative_energy_drift": 0.04580858836288826,
+          "final_center_of_mass_drift": 0.009077278504179276,
+          "max_center_of_mass_drift": 0.009077031073530861
+        }
+      }
+    },
+    {
+      "trajectory_index": 501,
+      "rollout_position_mse": 0.00024016504175961018,
+      "rollout_position_rmse": 0.01549725916927281,
+      "final_step_position_rmse": 0.03653719276189804,
+      "max_step_position_rmse": 0.03653719276189804,
+      "acceleration_mse_on_true_states": 0.0002699160249903798,
+      "acceleration_rmse_on_true_states": 0.0164291212482707,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.02077805995941162,
+          "max_absolute_energy_drift": 0.02077805995941162,
+          "final_absolute_relative_energy_drift": 0.02732502669095993,
+          "max_absolute_relative_energy_drift": 0.02732502669095993,
+          "final_center_of_mass_drift": 0.018538575619459152,
+          "max_center_of_mass_drift": 0.018538575619459152
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 0.0006731748580932617,
+          "max_absolute_energy_drift": 0.0006731748580932617,
+          "final_absolute_relative_energy_drift": 0.0008852857863530517,
+          "max_absolute_relative_energy_drift": 0.0008852857863530517,
+          "final_center_of_mass_drift": 5.263852358439181e-07,
+          "max_center_of_mass_drift": 5.400040095082659e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.02010488510131836,
+          "max_absolute_energy_drift": 0.02010488510131836,
+          "final_absolute_relative_energy_drift": 0.02643974090460688,
+          "max_absolute_relative_energy_drift": 0.02643974090460688,
+          "final_center_of_mass_drift": 0.01853804923422331,
+          "max_center_of_mass_drift": 0.018538035615449644
+        }
+      }
+    },
+    {
+      "trajectory_index": 1697,
+      "rollout_position_mse": 0.00109672371763736,
+      "rollout_position_rmse": 0.03311681925604209,
+      "final_step_position_rmse": 0.07281512767076492,
+      "max_step_position_rmse": 0.07281512767076492,
+      "acceleration_mse_on_true_states": 0.00012617665925063193,
+      "acceleration_rmse_on_true_states": 0.011232838432499238,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.02096855640411377,
+          "max_absolute_energy_drift": 0.02096855640411377,
+          "final_absolute_relative_energy_drift": 0.05001800134778023,
+          "max_absolute_relative_energy_drift": 0.05001800134778023,
+          "final_center_of_mass_drift": 0.029720759019255638,
+          "max_center_of_mass_drift": 0.029720759019255638
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 9.5367431640625e-07,
+          "max_absolute_energy_drift": 5.364418029785156e-05,
+          "final_absolute_relative_energy_drift": 2.274876806040993e-06,
+          "max_absolute_relative_energy_drift": 0.00012796181545127183,
+          "final_center_of_mass_drift": 6.622346973017557e-07,
+          "max_center_of_mass_drift": 7.657912419745116e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.020967602729797363,
+          "max_absolute_energy_drift": 0.020914912223815918,
+          "final_absolute_relative_energy_drift": 0.05001572647097419,
+          "max_absolute_relative_energy_drift": 0.049890039532328956,
+          "final_center_of_mass_drift": 0.029720096784558336,
+          "max_center_of_mass_drift": 0.029719993228013664
+        }
+      }
+    },
+    {
+      "trajectory_index": 1614,
+      "rollout_position_mse": 0.0016619025263935328,
+      "rollout_position_rmse": 0.040766438725911944,
+      "final_step_position_rmse": 0.08826219290494919,
+      "max_step_position_rmse": 0.08826219290494919,
+      "acceleration_mse_on_true_states": 0.006618852261453867,
+      "acceleration_rmse_on_true_states": 0.08135632895757937,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.05275118350982666,
+          "max_absolute_energy_drift": 0.0929405689239502,
+          "final_absolute_relative_energy_drift": 0.3847389221191406,
+          "max_absolute_relative_energy_drift": 0.6778587698936462,
+          "final_center_of_mass_drift": 0.03082897700369358,
+          "max_center_of_mass_drift": 0.03082897700369358
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 8.940696716308594e-06,
+          "max_absolute_energy_drift": 0.003027200698852539,
+          "final_absolute_relative_energy_drift": 6.520866008941084e-05,
+          "max_absolute_relative_energy_drift": 0.022078782320022583,
+          "final_center_of_mass_drift": 1.9671524853492883e-07,
+          "max_center_of_mass_drift": 4.6041208179303794e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.05274224281311035,
+          "max_absolute_energy_drift": 0.08991336822509766,
+          "final_absolute_relative_energy_drift": 0.3846737134590512,
+          "max_absolute_relative_energy_drift": 0.6557799875736237,
+          "final_center_of_mass_drift": 0.030828780288445046,
+          "max_center_of_mass_drift": 0.030828516591611788
+        }
+      }
+    },
+    {
+      "trajectory_index": 2414,
+      "rollout_position_mse": 0.0007146841380745173,
+      "rollout_position_rmse": 0.0267335769786708,
+      "final_step_position_rmse": 0.07565245777368546,
+      "max_step_position_rmse": 0.07565245777368546,
+      "acceleration_mse_on_true_states": 0.00042328907875344157,
+      "acceleration_rmse_on_true_states": 0.0205739903459062,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.09365856647491455,
+          "max_absolute_energy_drift": 0.1091156005859375,
+          "final_absolute_relative_energy_drift": 0.1908903568983078,
+          "max_absolute_relative_energy_drift": 0.22239413857460022,
+          "final_center_of_mass_drift": 0.013576434925198555,
+          "max_center_of_mass_drift": 0.013576434925198555
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 1.621246337890625e-05,
+          "max_absolute_energy_drift": 0.00010561943054199219,
+          "final_absolute_relative_energy_drift": 3.304345955257304e-05,
+          "max_absolute_relative_energy_drift": 0.00021526840282604098,
+          "final_center_of_mass_drift": 1.2106911526643671e-06,
+          "max_center_of_mass_drift": 1.238811933035322e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.09364235401153564,
+          "max_absolute_energy_drift": 0.10900998115539551,
+          "final_absolute_relative_energy_drift": 0.19085731343875523,
+          "max_absolute_relative_energy_drift": 0.22217887017177418,
+          "final_center_of_mass_drift": 0.01357522423404589,
+          "max_center_of_mass_drift": 0.01357519611326552
+        }
+      }
+    },
+    {
+      "trajectory_index": 1694,
+      "rollout_position_mse": 0.00028485016082413495,
+      "rollout_position_rmse": 0.016877504579295332,
+      "final_step_position_rmse": 0.034439507871866226,
+      "max_step_position_rmse": 0.034439507871866226,
+      "acceleration_mse_on_true_states": 0.00014002321404404938,
+      "acceleration_rmse_on_true_states": 0.011833140497942606,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.037969112396240234,
+          "max_absolute_energy_drift": 0.037969112396240234,
+          "final_absolute_relative_energy_drift": 2.7044458389282227,
+          "max_absolute_relative_energy_drift": 2.7044458389282227,
+          "final_center_of_mass_drift": 0.03299553692340851,
+          "max_center_of_mass_drift": 0.03299553692340851
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 0.0001556873321533203,
+          "max_absolute_energy_drift": 0.0003829002380371094,
+          "final_absolute_relative_energy_drift": 0.011089223437011242,
+          "max_absolute_relative_energy_drift": 0.027273036539554596,
+          "final_center_of_mass_drift": 3.352992621330486e-07,
+          "max_center_of_mass_drift": 5.731229748562328e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.037813425064086914,
+          "max_absolute_energy_drift": 0.037586212158203125,
+          "final_absolute_relative_energy_drift": 2.6933566154912114,
+          "max_absolute_relative_energy_drift": 2.677172802388668,
+          "final_center_of_mass_drift": 0.032995201624146375,
+          "max_center_of_mass_drift": 0.03299496380043365
+        }
+      }
+    },
+    {
+      "trajectory_index": 762,
+      "rollout_position_mse": 0.0005881998222321272,
+      "rollout_position_rmse": 0.02425283122095495,
+      "final_step_position_rmse": 0.05230593681335449,
+      "max_step_position_rmse": 0.05230593681335449,
+      "acceleration_mse_on_true_states": 0.0001641269336687401,
+      "acceleration_rmse_on_true_states": 0.012811203443421702,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.09136682748794556,
+          "max_absolute_energy_drift": 0.09136682748794556,
+          "final_absolute_relative_energy_drift": 0.11083558946847916,
+          "max_absolute_relative_energy_drift": 0.11083558946847916,
+          "final_center_of_mass_drift": 0.031654663383960724,
+          "max_center_of_mass_drift": 0.031654663383960724
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 8.022785186767578e-05,
+          "max_absolute_energy_drift": 0.00011134147644042969,
+          "final_absolute_relative_energy_drift": 9.732307808008045e-05,
+          "max_absolute_relative_energy_drift": 0.00013506649702321738,
+          "final_center_of_mass_drift": 1.0281149798174738e-06,
+          "max_center_of_mass_drift": 1.0294992307535722e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.09128659963607788,
+          "max_absolute_energy_drift": 0.09125548601150513,
+          "final_absolute_relative_energy_drift": 0.11073826639039908,
+          "max_absolute_relative_energy_drift": 0.11070052297145594,
+          "final_center_of_mass_drift": 0.031653635268980906,
+          "max_center_of_mass_drift": 0.03165363388472997
+        }
+      }
+    },
+    {
+      "trajectory_index": 1486,
+      "rollout_position_mse": 0.0006011296645738184,
+      "rollout_position_rmse": 0.024517945765781816,
+      "final_step_position_rmse": 0.04975605756044388,
+      "max_step_position_rmse": 0.04975605756044388,
+      "acceleration_mse_on_true_states": 0.0008661891333758831,
+      "acceleration_rmse_on_true_states": 0.029431091270557454,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.15586179494857788,
+          "max_absolute_energy_drift": 0.15709245204925537,
+          "final_absolute_relative_energy_drift": 0.15508711338043213,
+          "max_absolute_relative_energy_drift": 0.15631166100502014,
+          "final_center_of_mass_drift": 0.04930394887924194,
+          "max_center_of_mass_drift": 0.04930394887924194
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 0.0001245737075805664,
+          "max_absolute_energy_drift": 0.0028274059295654297,
+          "final_absolute_relative_energy_drift": 0.00012395453813951463,
+          "max_absolute_relative_energy_drift": 0.002813352970406413,
+          "final_center_of_mass_drift": 1.48434469338099e-06,
+          "max_center_of_mass_drift": 1.4856826737741358e-06
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.15573722124099731,
+          "max_absolute_energy_drift": 0.15426504611968994,
+          "final_absolute_relative_energy_drift": 0.15496315884229261,
+          "max_absolute_relative_energy_drift": 0.15349830803461373,
+          "final_center_of_mass_drift": 0.04930246453454856,
+          "max_center_of_mass_drift": 0.04930246319656817
+        }
+      }
+    },
+    {
+      "trajectory_index": 1500,
+      "rollout_position_mse": 0.0002917363599408418,
+      "rollout_position_rmse": 0.01708029156486627,
+      "final_step_position_rmse": 0.031881533563137054,
+      "max_step_position_rmse": 0.031881533563137054,
+      "acceleration_mse_on_true_states": 0.0009245522669516504,
+      "acceleration_rmse_on_true_states": 0.030406451074593537,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.010048985481262207,
+          "max_absolute_energy_drift": 0.02059459686279297,
+          "final_absolute_relative_energy_drift": 0.00789168756455183,
+          "max_absolute_relative_energy_drift": 0.016173385083675385,
+          "final_center_of_mass_drift": 0.025869468227028847,
+          "max_center_of_mass_drift": 0.025869468227028847
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 1.3113021850585938e-05,
+          "max_absolute_energy_drift": 0.0012843608856201172,
+          "final_absolute_relative_energy_drift": 1.0297942026227247e-05,
+          "max_absolute_relative_energy_drift": 0.0010086365509778261,
+          "final_center_of_mass_drift": 4.6804285602775053e-07,
+          "max_center_of_mass_drift": 5.33400452695787e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.010035872459411621,
+          "max_absolute_energy_drift": 0.01931023597717285,
+          "final_absolute_relative_energy_drift": 0.007881389622525603,
+          "max_absolute_relative_energy_drift": 0.015164748532697558,
+          "final_center_of_mass_drift": 0.02586900018417282,
+          "max_center_of_mass_drift": 0.02586893482657615
+        }
+      }
+    },
+    {
+      "trajectory_index": 1581,
+      "rollout_position_mse": 0.00024035948445089161,
+      "rollout_position_rmse": 0.01550353135420739,
+      "final_step_position_rmse": 0.04194553941488266,
+      "max_step_position_rmse": 0.04194553941488266,
+      "acceleration_mse_on_true_states": 7.213035860331729e-05,
+      "acceleration_rmse_on_true_states": 0.008492959354860783,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.019791245460510254,
+          "max_absolute_energy_drift": 0.019791245460510254,
+          "final_absolute_relative_energy_drift": 0.013943921774625778,
+          "max_absolute_relative_energy_drift": 0.013943921774625778,
+          "final_center_of_mass_drift": 0.007733146194368601,
+          "max_center_of_mass_drift": 0.007733146194368601
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 5.960464477539062e-07,
+          "max_absolute_energy_drift": 3.5762786865234375e-06,
+          "final_absolute_relative_energy_drift": 4.199445129415835e-07,
+          "max_absolute_relative_energy_drift": 2.519667077649501e-06,
+          "final_center_of_mass_drift": 7.11707514255977e-07,
+          "max_center_of_mass_drift": 7.300639595086977e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.0197906494140625,
+          "max_absolute_energy_drift": 0.01978766918182373,
+          "final_absolute_relative_energy_drift": 0.013943501830112837,
+          "max_absolute_relative_energy_drift": 0.013941402107548129,
+          "final_center_of_mass_drift": 0.007732434486854345,
+          "max_center_of_mass_drift": 0.007732416130409092
+        }
+      }
+    },
+    {
+      "trajectory_index": 82,
+      "rollout_position_mse": 0.00023663592583034188,
+      "rollout_position_rmse": 0.015382975194361522,
+      "final_step_position_rmse": 0.03392838314175606,
+      "max_step_position_rmse": 0.03392838314175606,
+      "acceleration_mse_on_true_states": 0.00013061592471785843,
+      "acceleration_rmse_on_true_states": 0.011428732419558104,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.041965603828430176,
+          "max_absolute_energy_drift": 0.041965603828430176,
+          "final_absolute_relative_energy_drift": 0.25414830446243286,
+          "max_absolute_relative_energy_drift": 0.25414830446243286,
+          "final_center_of_mass_drift": 0.02676367200911045,
+          "max_center_of_mass_drift": 0.02676367200911045
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 1.6450881958007812e-05,
+          "max_absolute_energy_drift": 1.7642974853515625e-05,
+          "final_absolute_relative_energy_drift": 9.962834155885503e-05,
+          "max_absolute_relative_energy_drift": 0.00010684778681024909,
+          "final_center_of_mass_drift": 3.342279626394884e-07,
+          "max_center_of_mass_drift": 4.3664337567861367e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.04194915294647217,
+          "max_absolute_energy_drift": 0.04194796085357666,
+          "final_absolute_relative_energy_drift": 0.254048676120874,
+          "max_absolute_relative_energy_drift": 0.2540414566756226,
+          "final_center_of_mass_drift": 0.02676333778114781,
+          "max_center_of_mass_drift": 0.026763235365734772
+        }
+      }
+    },
+    {
+      "trajectory_index": 1835,
+      "rollout_position_mse": 0.00107250374276191,
+      "rollout_position_rmse": 0.03274910293064392,
+      "final_step_position_rmse": 0.07648660242557526,
+      "max_step_position_rmse": 0.07648660242557526,
+      "acceleration_mse_on_true_states": 0.0026533796917647123,
+      "acceleration_rmse_on_true_states": 0.051510966713552486,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.01440882682800293,
+          "max_absolute_energy_drift": 0.0670461654663086,
+          "final_absolute_relative_energy_drift": 0.010492770001292229,
+          "max_absolute_relative_energy_drift": 0.048824239522218704,
+          "final_center_of_mass_drift": 0.041571080684661865,
+          "max_center_of_mass_drift": 0.041571080684661865
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 4.5299530029296875e-05,
+          "max_absolute_energy_drift": 0.002994060516357422,
+          "final_absolute_relative_energy_drift": 3.298794399597682e-05,
+          "max_absolute_relative_energy_drift": 0.0021803295239806175,
+          "final_center_of_mass_drift": 8.928129346941205e-08,
+          "max_center_of_mass_drift": 2.675962775811058e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.014363527297973633,
+          "max_absolute_energy_drift": 0.06405210494995117,
+          "final_absolute_relative_energy_drift": 0.010459782057296252,
+          "max_absolute_relative_energy_drift": 0.04664390999823809,
+          "final_center_of_mass_drift": 0.041570991403368396,
+          "max_center_of_mass_drift": 0.041570813088384284
+        }
+      }
+    },
+    {
+      "trajectory_index": 1683,
+      "rollout_position_mse": 0.00024377262161578983,
+      "rollout_position_rmse": 0.015613219450702338,
+      "final_step_position_rmse": 0.032225240021944046,
+      "max_step_position_rmse": 0.032225240021944046,
+      "acceleration_mse_on_true_states": 0.00021783595730084926,
+      "acceleration_rmse_on_true_states": 0.014759266828025343,
+      "non_finite_prediction": false,
+      "non_finite_acceleration_prediction": false,
+      "failed": false,
+      "conservation": {
+        "predicted": {
+          "final_absolute_energy_drift": 0.005961954593658447,
+          "max_absolute_energy_drift": 0.013470292091369629,
+          "final_absolute_relative_energy_drift": 0.03702424466609955,
+          "max_absolute_relative_energy_drift": 0.08365166187286377,
+          "final_center_of_mass_drift": 0.038604460656642914,
+          "max_center_of_mass_drift": 0.038604460656642914
+        },
+        "true_numerical": {
+          "final_absolute_energy_drift": 8.344650268554688e-06,
+          "max_absolute_energy_drift": 0.00020039081573486328,
+          "final_absolute_relative_energy_drift": 5.1820989028783515e-05,
+          "max_absolute_relative_energy_drift": 0.0012444440508261323,
+          "final_center_of_mass_drift": 6.200701250236307e-07,
+          "max_center_of_mass_drift": 9.91614570011734e-07
+        },
+        "predicted_minus_true": {
+          "final_absolute_energy_drift": 0.005953609943389893,
+          "max_absolute_energy_drift": 0.013269901275634766,
+          "final_absolute_relative_energy_drift": 0.036972423677070765,
+          "max_absolute_relative_energy_drift": 0.08240721782203764,
+          "final_center_of_mass_drift": 0.03860384058651789,
+          "max_center_of_mass_drift": 0.0386034690420729
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "gns": {
+    "model_config": {
+      "node_input_dim": 3,
+      "edge_input_dim": 8,
+      "output_dim": 2,
+      "latent_dim": 43,
+      "hidden_dim": 43,
+      "num_message_passing_steps": 6
+    },
+    "training_config": {
+      "steps_per_epoch": 1000,
+      "batch_size": 4,
+      "num_epochs": 100000,
+      "learning_rate": 0.0001,
+      "seed": 42,
+      "num_train_trajectories": 2100,
+      "num_val_trajectories": 450,
+      "num_test_trajectories": 450,
+      "num_validation_samples": 500,
+      "validation_seed": 1234,
+      "split_seed": 42
+    },
+    "parameter_count": 114597,
+    "checkpoint_sha256": "8c3785e9b1262914246ae877deca6cfcd5f4c0d9e98cdf6b36a4e3504e44dddf",
+    "evaluation_sha256": "94b7a00b872037891a38abe09be637c2d171e2702d555f3971b8d2df95b1b029"
+  },
+  "egns": {
+    "model_config": {
+      "node_input_dim": 1,
+      "edge_input_dim": 5,
+      "output_dim": 2,
+      "latent_dim": 40,
+      "hidden_dim": 40,
+      "num_message_passing_steps": 6
+    },
+    "training_config": {
+      "steps_per_epoch": 1000,
+      "batch_size": 4,
+      "num_epochs": 100000,
+      "learning_rate": 0.0001,
+      "seed": 42,
+      "num_train_trajectories": 2100,
+      "num_val_trajectories": 450,
+      "num_test_trajectories": 450,
+      "num_validation_samples": 500,
+      "validation_seed": 1234,
+      "split_seed": 42
+    },
+    "parameter_count": 116006,
+    "checkpoint_sha256": "23236a497e29211b110e78eea06f504ae8366b942fe5bb0595cc99c349c3a2db",
+    "evaluation_sha256": "cfa1b136fbe85ebc27da1557e2e1ef5fe35bbd395c117811a5b33bc730d1c4eb"
+  },
+  "egnn_hnn": {
+    "model_config": {
+      "node_input_dim": 1,
+      "edge_input_dim": 2,
+      "output_dim": 2,
+      "latent_dim": 41,
+      "hidden_dim": 41,
+      "num_message_passing_steps": 6,
+      "epsilon": 0.0
+    },
+    "training_config": {
+      "steps_per_epoch": 1000,
+      "batch_size": 4,
+      "num_epochs": 100000,
+      "learning_rate": 0.0001,
+      "seed": 42,
+      "num_train_trajectories": 2100,
+      "num_validation_trajectories": 450,
+      "num_test_trajectories": 450,
+      "num_validation_samples": 500,
+      "validation_seed": 1234,
+      "split_seed": 42
+    },
+    "parameter_count": 116647,
+    "checkpoint_sha256": "44c23e805287eae44c8775b1c9038c9dcc73eda8a75216039cb8966a6c1867f2",
+    "evaluation_sha256": "022fadd3761d3cf0a9411c8e5e0bd76da9d5cb9b6f2b233e322494642e11ce88"
+  },
+  "hnn": {
+    "model_config": {
+      "input_dim": 9,
+      "hidden_dim": 235,
+      "num_bodies": 3,
+      "dim": 2,
+      "spatial_dim": 6,
+      "mass_dim": 3,
+      "output_dim": 2
+    },
+    "training_config": {
+      "epochs": 100000,
+      "batch_size": 256,
+      "lr": 0.0001,
+      "seed": 42,
+      "split_seed": 42,
+      "num_train_trajectories": 2100,
+      "num_val_trajectories": 450,
+      "num_test_trajectories": 450,
+      "num_validation_samples": 500,
+      "validation_seed": 1234
+    },
+    "parameter_count": 113506,
+    "checkpoint_sha256": "3d635ef670698067edd7eb8947830efb2df26c9bd54fde88bbf31c40f4c3f09d",
+    "evaluation_sha256": "2574e87f31c58781968e1e6ebf151145beea7374b41a1b147fe6d0b3b4c048e0"
+  },
+  "mlp": {
+    "model_config": {
+      "input_dim": 15,
+      "hidden_dim": 234,
+      "num_hidden_layers": 3,
+      "num_bodies": 3,
+      "dim": 2,
+      "spatial_dim": 6,
+      "mass_dim": 3,
+      "output_dim": 6,
+      "input_features": "flattened_positions_velocities_masses",
+      "target": "normalized_acceleration",
+      "trainable_parameters": 115134
+    },
+    "training_config": {
+      "epochs": 100000,
+      "batch_size": 256,
+      "lr": 0.0001,
+      "seed": 42,
+      "split_seed": 42,
+      "num_train_trajectories": 2100,
+      "num_val_trajectories": 450,
+      "num_test_trajectories": 450,
+      "num_validation_samples": 500,
+      "validation_seed": 1234
+    },
+    "parameter_count": 115134,
+    "checkpoint_sha256": "1192eb5d2fa8b28f116272f59a288acdf791c28280978598d766a3b1d771ed3f",
+    "evaluation_sha256": "8cd1231238a4a9fa9c0587e500e00ea487f67474ce1179d5a0486b77843e50bd"
+  },
+  "setnode": {
+    "model_config": {
+      "node_input_dim": 1,
+      "edge_input_dim": 2,
+      "output_dim": 2,
+      "latent_dim": 64,
+      "hidden_dim": 64,
+      "num_message_passing_steps": 1,
+      "num_hidden_layers": 1,
+      "distance_dim": 8,
+      "ffn_dim": 128,
+      "num_heads": 2,
+      "epsilon": 0.0
+    },
+    "training_config": {
+      "steps_per_epoch": 1000,
+      "batch_size": 4,
+      "num_epochs": 100000,
+      "learning_rate": 0.0001,
+      "seed": 42,
+      "num_train_trajectories": 2100,
+      "num_validation_trajectories": 450,
+      "num_test_trajectories": 450,
+      "num_validation_samples": 500,
+      "validation_seed": 1234,
+      "split_seed": 42
+    },
+    "parameter_count": 114514,
+    "checkpoint_sha256": "b293fea95e16943a37f7d6ef3dbf4e700d3cfdc1e6ff9801563d25a411a0c86c",
+    "evaluation_sha256": "14020bce6c38cdc5fb40fcf996139ee2329cbc8ca95a74e634fe59d1fa436fd1"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "scope": "Descriptive reanalysis of the saved fixed suite; no new model evaluation.",
+  "standard_deviation": "population standard deviation across 50 trajectories (ddof=0)",
+  "models": {
+    "gns": {
+      "mean_position_mse": 0.001811523263459094,
+      "sd_position_mse": 0.001807466898580354,
+      "median_position_mse": 0.0012718004873022437,
+      "setnode_lower_mse_count": 50,
+      "setnode_mean_mse_reduction_percent": 95.07453844546853
+    },
+    "egns": {
+      "mean_position_mse": 0.00013423618675005854,
+      "sd_position_mse": 0.00017369539793301274,
+      "median_position_mse": 5.219576269155368e-05,
+      "setnode_lower_mse_count": 30,
+      "setnode_mean_mse_reduction_percent": 33.53067898210954
+    },
+    "egnn_hnn": {
+      "mean_position_mse": 0.00023340541365996615,
+      "sd_position_mse": 0.0005570253187375958,
+      "median_position_mse": 7.50182443880476e-05,
+      "setnode_lower_mse_count": 32,
+      "setnode_mean_mse_reduction_percent": 61.772145515416796
+    },
+    "hnn": {
+      "mean_position_mse": 0.0004707088166833273,
+      "sd_position_mse": 0.0006336531491456755,
+      "median_position_mse": 0.00018969665688928217,
+      "setnode_lower_mse_count": 40,
+      "setnode_mean_mse_reduction_percent": 81.0443572054231
+    },
+    "mlp": {
+      "mean_position_mse": 0.0007614218498929404,
+      "sd_position_mse": 0.0010851831483945917,
+      "median_position_mse": 0.00042618627776391804,
+      "setnode_lower_mse_count": 49,
+      "setnode_mean_mse_reduction_percent": 88.28167566958882
+    },
+    "setnode": {
+      "mean_position_mse": 8.922588189307135e-05,
+      "sd_position_mse": 0.000114342178016099,
+      "median_position_mse": 3.1872392355580814e-05,
+      "setnode_lower_mse_count": null,
+      "setnode_mean_mse_reduction_percent": null
+    }
+  }
+}

@@ -1,3 +1,5 @@
+Please excuse the very messy, repeated, and unorganized code. This was created during an REU with deadlines and no time for refactoring. This project was a great learning experience on how to not write code!
+
 # SETNODE: Spatial Equivariant Transformer Neural ODE
 
 [Read the report (PDF)](SETNODE_report/SETNODE_Report.pdf) · [Report source and supporting records](SETNODE_report/README.md) · [Quick start](#quick-start)
